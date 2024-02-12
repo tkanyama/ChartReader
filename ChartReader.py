@@ -7,16 +7,22 @@
 # pip install pdfplumber
 import pdfplumber
 from io import StringIO
+
+# pip install numpy matplotlib scipy
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 import re
 import sys,csv,os
-# pip install reportlab
+
+# pip install reportlab ja_cvu_normalizer
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from ja_cvu_normalizer.ja_cvu_normalizer import JaCvuNormalizer
+
+# 自作ツールの読み込み
 from pattenCheck import PatternCheck
+
 cc = 25.4/72.0
 Climit = 3
 DbPrint = False
