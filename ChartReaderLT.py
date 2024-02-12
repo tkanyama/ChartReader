@@ -19,6 +19,8 @@ from ja_cvu_normalizer.ja_cvu_normalizer import JaCvuNormalizer
 from pattenCheck import PatternCheck
 cc = 25.4/72.0
 Climit = 3
+DbPrint = False
+# DbPrint = True
 
 
 
@@ -184,10 +186,11 @@ class ChartReader:
         spaceN = 1.5
         page_lines3 = []
         for line in page_lines:
-            t1 = ""
-            for L1 in line:
-                t1 += L1["text"]+","
-            print(t1,len(line))
+            if DbPrint:
+                t1 = ""
+                for L1 in line:
+                    t1 += L1["text"]+","
+                print(t1,len(line))
 
             if len(line)>1 :
                 line2 = []
@@ -199,7 +202,7 @@ class ChartReader:
                     pitch = (word0["x1"] - word0["x0"]) / len(word0["text"])
                     word1 = line[wi + 1]
                     if len(word0["text"]) <= Climit:
-                        c = 2.0
+                        c = 2.2
                     elif "・" in word0["text"] or "・" in word1["text"]:
                         c = 5.0
                     else:
@@ -222,10 +225,11 @@ class ChartReader:
             else:
                 line2=line
             #end if
-            t2 = ""
-            for L1 in line2:
-                t2 += L1["text"]+","
-            print(t2,len(line2))
+            if DbPrint:
+                t2 = ""
+                for L1 in line2:
+                    t2 += L1["text"]+","
+                print(t2,len(line2))
 
             #     line2 = []
             #     word0 = {}
@@ -342,7 +346,8 @@ class ChartReader:
                             word["x1"] = x21
                             word["xm"] = (x10 + x21)/2.0
                             line3.append(word)
-                            print(word["text"])
+                            if DbPrint:
+                                print(word["text"])
                             wi += 1
 
                         else:
@@ -368,12 +373,12 @@ class ChartReader:
             if len(line3)>0:
                 page_lines3.append(line3)
             #end if
-            
-            t3 = ""
-            for L1 in line3:
-                t3 += L1["text"]+","
-            print(t3,len(line3))
-            print()
+            if DbPrint:
+                t3 = ""
+                for L1 in line3:
+                    t3 += L1["text"]+","
+                print(t3,len(line3))
+                print()
             
         #next
         page_lines = page_lines3
@@ -390,19 +395,26 @@ class ChartReader:
             BeamData = []
             ColumnData = []
             for pageN, page in enumerate(pdf.pages):
-                print("page = {}".format(pageN+1))
-                # Page_Width = page.width
-                # Page_Height = page.height
 
-                page_lines = self.Read_Word_From_Page(page)
+                if pageN >= 0:
+                    print("page = {}".format(pageN+1),end="")
 
-                BeamData1, ColumnData1 = CR.ElementFinder(page_lines)
-                if len(BeamData1) > 0:
-                    BeamData += BeamData1
-                #end if
-                if len(ColumnData1) > 0:
-                    ColumnData += ColumnData1
-                #end if
+                    # if pageN == 33:
+                    #     a=0
+                    # Page_Width = page.width
+                    # Page_Height = page.height
+
+                    page_lines = self.Read_Word_From_Page(page)
+
+                    BeamData1, ColumnData1 = CR.ElementFinder(page_lines)
+
+                    print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
+                    if len(BeamData1) > 0:
+                        BeamData += BeamData1
+                    #end if
+                    if len(ColumnData1) > 0:
+                        ColumnData += ColumnData1
+                    #end if
             #next
         #end with
         
@@ -512,41 +524,83 @@ class ChartReader:
         else:
             梁断面位置 = []
         #end if ja_cvu_normalizer.normalize(Line) 
-        梁断面位置2 = []
-        for data in 梁断面位置:
-            data["text"] = ja_cvu_normalizer.normalize(data["text"]) 
-            梁断面位置2.append(data)
-        #next
-        梁断面位置 = 梁断面位置2
+        if len(梁断面位置):
+            梁断面位置2 = []
+            for data in 梁断面位置:
+                data["text"] = ja_cvu_normalizer.normalize(data["text"]) 
+                梁断面位置2.append(data)
+            #next
+            梁断面位置 = 梁断面位置2
 
-        # 梁断面位置のうちすぐ上に片持梁符号や小梁符号があるものは削除する。
-        梁断面位置2 = []
-        for d in 梁断面位置:
-            # print(d["text"])
-            row = d["row"]
-            xm = d["xm"]
-            flag = True
-            for d1 in 片持梁符号:
-                row1 = d1["row"]
-                xm1 = d1["xm"]
-                if abs(row - row1) <=3 and abs(xm - xm1)<beamPitch:
-                    flag = False
+            # 梁断面位置のうちすぐ上に片持梁符号や小梁符号があるものは削除する。
+            梁断面位置2 = []
+            for d in 梁断面位置:
+                # print(d["text"])
+                row = d["row"]
+                xm = d["xm"]
+                flag = True
+                for d1 in 片持梁符号:
+                    row1 = d1["row"]
+                    xm1 = d1["xm"]
+                    if abs(row - row1) <=3 and abs(xm - xm1)<beamPitch:
+                        flag = False
+                    #end if
+                #next
+                for d1 in 小梁符号:
+                    row1 = d1["row"]
+                    xm1 = d1["xm"]
+                    if abs(row - row1) <=3 and abs(xm - xm1)<beamPitch:
+                        flag = False
+                    #end if
+                #next
+                if flag :
+                    梁断面位置2.append(d)
                 #end if
             #next
-            for d1 in 小梁符号:
-                row1 = d1["row"]
-                xm1 = d1["xm"]
-                if abs(row - row1) <=3 and abs(xm - xm1)<beamPitch:
+            梁断面位置 = 梁断面位置2
+
+            # 梁断面位置の並び整える
+            梁断面位置2=[]
+            y0 = 梁断面位置[0]["y0"]
+            yy = []
+            yy.append(y0)
+            for i in range(1,len(梁断面位置)):
+                yy0 = 梁断面位置[i]["y0"]
+                for yy1 in yy:
                     flag = False
+                    if abs(yy0 - yy1) > ypitch:
+                        flag = True
+                    #end if
+                #end if
+                if flag :
+                    yy.append(yy0)
                 #end if
             #next
-            if flag :
-                梁断面位置2.append(d)
-            #end if
-        #next
-        梁断面位置 = 梁断面位置2
+            a=0
+            
+            for yy1 in yy:
+                data = []
+                for d in 梁断面位置:
+                    if abs(d["y0"] - yy1) < 0.5:
+                        data.append(d)
+                    #end if
+                #end if
+                L2 = []
+                for d in data:
+                    L2.append(d["x0"])
+                #next
+                VArray = np.array(L2)      # リストをNumpyの配列に変換
+                index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
+                data2 = []
+                for j in range(len(index1)):
+                    data2.append(data[index1[j]])
+                #next
+                梁断面位置2 += data2
+            #next
+            梁断面位置 = 梁断面位置2
+        #end if
 
-
+                
 
         項目名1 = wordsByKind["項目名1"]
         項目名2 = wordsByKind["項目名2"]
@@ -579,7 +633,7 @@ class ChartReader:
             return BeamData,ColumnData
         #end if
         # 各部材の項目名Itemに名称を追加
-        ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり","柱符号","柱符号2","腹筋"]
+        ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり","柱符号","柱符号2","腹筋","フープ筋","材料"]
         for Item in ItemName:
             if len(locals()[Item])>0:
                 for j in range(len(locals()[Item])):
@@ -662,19 +716,20 @@ class ChartReader:
         # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
         floorXmin1= 10000.0
         if len(梁符号)>0:
-            flootXmin1 = 梁符号[0]["x0"]
+            floorXmin1 = 梁符号[0]["x0"]
         #end if
         floorXmin2 = 10000.0
         if len(柱符号)>0:
             floorXmin2 = 柱符号[0]["x0"]
         #end if
-        if floorXmin1 < floorXmin1:
-            floorXmin = floorXmin1 - 72
+        if floorXmin1 < floorXmin2:
+            floorXmin = floorXmin1 - 36
         else:
-            floorXmin = floorXmin2 -72
+            floorXmin = floorXmin2 - 36
         #end if
 
-        if len(階)>0:
+
+        if len(階) > 0:
             # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
             階2 = []
             for d in 階:
@@ -684,23 +739,25 @@ class ChartReader:
             #next
             階 = 階2        
             
-            # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
-            階2 = []
-            row0 = 階[0]["row"]
-            xm0 = 階[0]["xm"]
-            階2.append(階[0])
-            for i in range(1, len(階)):
-                row = 階[i]["row"]
-                xm = 階[i]["xm"]
-                if row - row0 > 6 or abs(xm - xm0) > 72:
-                    階2.append(階[i])
-                else:
-                    階2[i-1]["text"] += " , " + 階[i]["text"]
+            if len(階) > 0:
+                # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
+                階2 = []
+                row0 = 階[0]["row"]
+                xm0 = 階[0]["xm"]
+                階2.append(階[0])
+                for i in range(1, len(階)):
+                    row = 階[i]["row"]
+                    xm = 階[i]["xm"]
+                    if row - row0 > 6 or abs(xm - xm0) > 72:
+                        階2.append(階[i])
+                    else:
+                        階2[i-1]["text"] += " , " + 階[i]["text"]
+                    #end if
+                    row0 = row
+                    xm0 = xm
                 #end if
-                row0 = row
-                xm0 = xm
+                階 = 階2
             #end if
-            階 = 階2
         #end if
 
         # かぶりデータを行で並び替え
@@ -731,6 +788,8 @@ class ChartReader:
                     text0 = 梁断面位置[i]["text"]
                     row0 = 梁断面位置[i]["row"]  # 行位置を記憶
                     xm0 = 梁断面位置[i]["xm"]    # 梁断面位置Ｘ座標を記憶
+                    y00 = 梁断面位置[i]["y0"]  # 行位置を記憶
+                    
                     sn2 = []
                     if "全断" in text0 :
                         Section.append([梁断面位置[i]])
@@ -765,7 +824,47 @@ class ChartReader:
                                 text1 = 梁断面位置[j]["text"]
                                 row1 = 梁断面位置[j]["row"]  # 行位置を記憶
                                 xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                if text1 == "中央" and row0 == row1 and abs(xm0-xm1) < beamPitch*1.2:
+                                y10 = 梁断面位置[j]["y0"]    # 梁断面位置Ｘ座標を記憶
+                                if text1 == "中央" and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
+                                    sn.append(梁断面位置[j])
+                                    dic = {}
+                                    dic["kind"] = 梁断面位置[j]["kind"]
+                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["number"] = j
+                                    dic["row"] = 梁断面位置[j]["row"]
+                                    dic["xm"] = 梁断面位置[j]["xm"]
+                                    dic["y0"] = 梁断面位置[j]["y0"]
+                                    dic["item"] = 梁断面位置[j]["item"]
+                                    sn2.append([dic])
+                                    # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
+                                    flag[j] = 1
+                                    # break
+                                #end if
+                            #end if
+                        #next
+                        Section.append(sn)
+                        Section2.append(sn2)
+                    elif "端部" in text0 or "両端" in text0 :
+                        sn = [梁断面位置[i]]
+                        dic = {}
+                        dic["kind"] = 梁断面位置[i]["kind"]
+                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["number"] = i
+                        dic["row"] = 梁断面位置[i]["row"]
+                        dic["xm"] = 梁断面位置[i]["xm"]
+                        dic["y0"] = 梁断面位置[i]["y0"]
+                        dic["item"] = 梁断面位置[i]["item"]
+                        sn2.append([dic])
+                        # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
+                        flag[i] = 1
+                        # sn2 = []
+                        for j in range(dn):
+                            if flag[j] == 0:
+                                text1 = 梁断面位置[j]["text"]
+                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = 梁断面位置[j]["y0"]    # 梁断面位置Ｘ座標を記憶
+                                if text1 == "中央" and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
                                     sn.append(梁断面位置[j])
                                     dic = {}
                                     dic["kind"] = 梁断面位置[j]["kind"]
@@ -803,7 +902,8 @@ class ChartReader:
                                 text1 = 梁断面位置[j]["text"]
                                 row1 = 梁断面位置[j]["row"]  # 行位置を記憶
                                 xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                if text1 == "先端" and row0 == row1 and abs(xm0-xm1) < beamPitch*1.2:
+                                y10 = 梁断面位置[j]["y0"]
+                                if text1 == "先端" and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
                                     sn.append(梁断面位置[j])
                                     dic = {}
                                     dic["kind"] = 梁断面位置[j]["kind"]
@@ -841,7 +941,8 @@ class ChartReader:
                                 text1 = 梁断面位置[j]["text"]
                                 row1 = 梁断面位置[j]["row"]  # 行位置を記憶
                                 xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                if "中央" in text1 and row0 == row1 and abs(xm0-xm1) < beamPitch*1.2:
+                                y10 = 梁断面位置[j]["y0"]
+                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
                                     sn.append(梁断面位置[j])
                                     dic = {}
                                     dic["kind"] = 梁断面位置[j]["kind"]
@@ -854,7 +955,7 @@ class ChartReader:
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
-                                    # break
+                                    break
                                 #end if
                             #end if
                         #next
@@ -863,7 +964,8 @@ class ChartReader:
                                 text1 = 梁断面位置[j]["text"]
                                 row1 = 梁断面位置[j]["row"]  # 行位置を記憶
                                 xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                if "右端" in text1 and row0 == row1 and abs(xm0-xm1) < beamPitch*2.4:
+                                y10 = 梁断面位置[j]["y0"]
+                                if "右端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*2.4:
                                     sn.append(梁断面位置[j])
                                     dic = {}
                                     dic["kind"] = 梁断面位置[j]["kind"]
@@ -876,7 +978,7 @@ class ChartReader:
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
-                                    # break
+                                    break
                                 #end if
                             #end if
                         #next
@@ -901,7 +1003,8 @@ class ChartReader:
                                 text1 = 梁断面位置[j]["text"]
                                 row1 = 梁断面位置[j]["row"]  # 行位置を記憶
                                 xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                if "中央" in text1 and row0 == row1 and abs(xm0-xm1) < beamPitch*1.2:
+                                y10 = 梁断面位置[j]["y0"]
+                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
                                     sn.append(梁断面位置[j])
                                     dic = {}
                                     dic["kind"] = 梁断面位置[j]["kind"]
@@ -914,7 +1017,7 @@ class ChartReader:
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
-                                    # break
+                                    break
                                 #end if
                             #end if
                         #next
@@ -923,7 +1026,8 @@ class ChartReader:
                                 text1 = 梁断面位置[j]["text"]
                                 row1 = 梁断面位置[j]["row"]  # 行位置を記憶
                                 xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                if "通端" in text1 and row0 == row1 and abs(xm0-xm1) < beamPitch*2.4:
+                                y10 = 梁断面位置[j]["y0"]
+                                if "通端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*2.4:
                                     sn.append(梁断面位置[j])
                                     dic = {}
                                     dic["kind"] = 梁断面位置[j]["kind"]
@@ -936,7 +1040,70 @@ class ChartReader:
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
-                                    # break
+                                    break
+                                #end if
+                            #end if
+                        #next
+                        Section.append(sn)
+                        Section2.append(sn2)
+
+                    elif "端" in text0 :
+                        sn = [梁断面位置[i]]
+                        dic = {}
+                        dic["kind"] = 梁断面位置[i]["kind"]
+                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["number"] = i
+                        dic["row"] = 梁断面位置[i]["row"]
+                        dic["xm"] = 梁断面位置[i]["xm"]
+                        dic["y0"] = 梁断面位置[i]["y0"]
+                        dic["item"] = 梁断面位置[i]["item"]
+                        sn2.append([dic])
+                        # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
+                        flag[i] = 1
+                        # sn2 = []
+                        for j in range(dn):
+                            if flag[j] == 0:
+                                text1 = 梁断面位置[j]["text"]
+                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = 梁断面位置[j]["y0"]
+                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
+                                    sn.append(梁断面位置[j])
+                                    dic = {}
+                                    dic["kind"] = 梁断面位置[j]["kind"]
+                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["number"] = j
+                                    dic["row"] = 梁断面位置[j]["row"]
+                                    dic["xm"] = 梁断面位置[j]["xm"]
+                                    dic["y0"] = 梁断面位置[j]["y0"]
+                                    dic["item"] = 梁断面位置[j]["item"]
+                                    sn2.append([dic])
+                                    # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
+                                    flag[j] = 1
+                                    break
+                                #end if
+                            #end if
+                        #next
+                        for j in range(dn):
+                            if flag[j] == 0:
+                                text1 = 梁断面位置[j]["text"]
+                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = 梁断面位置[j]["y0"]
+                                if "端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*2.4:
+                                    sn.append(梁断面位置[j])
+                                    dic = {}
+                                    dic["kind"] = 梁断面位置[j]["kind"]
+                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["number"] = j
+                                    dic["row"] = 梁断面位置[j]["row"]
+                                    dic["xm"] = 梁断面位置[j]["xm"]
+                                    dic["y0"] = 梁断面位置[j]["y0"]
+                                    dic["item"] = 梁断面位置[j]["item"]
+                                    sn2.append([dic])
+                                    # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
+                                    flag[j] = 1
+                                    break
                                 #end if
                             #end if
                         #next
@@ -2138,8 +2305,16 @@ if __name__ == '__main__':
 
     pdffname =[]
 
-    pdffname.append("構造図テストデータ.pdf")
-    pdffname.append("構造計算書テストデータ.pdf")
+    # pdffname.append("構造図テストデータ.pdf")
+    # pdffname.append("構造計算書テストデータ.pdf")
+
+    # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
+    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力のコピー.pdf")
+    
+    pdffname.append("02構造図.pdf")
+    # pdffname.append("02一貫計算書（一部）.pdf")
+
 
     # pdfname = "構造図テストデータ.pdf"
     # pdfname = "構造計算書テストデータ.pdf"

@@ -68,7 +68,8 @@ class PatternCheck:
                                     '|s*元端\s*|s*先端\s*'+
                                     '|\s*\d{1}通端\s*'+
                                     '|'+'\s*\d{1}通\s*,\s*\d{1}通端\s*' +
-                                    '|'+'\s*\d{1}通\s*(・)\s*\d{1}通端\s*'
+                                    '|'+'\s*\d{1}通\s*(・)\s*\d{1}通端\s*' +
+                                    '|\s*\w+\d+\s*端\s*|\s*全断\s*'
                                 ], 12]
         self.patternDic["項目名1"]=[[
                                     '符号名'+
@@ -94,8 +95,8 @@ class PatternCheck:
                                     '|'+'(\s*材料\s*)' # 主筋
                                 ] ,5]
         self.patternDic["柱符号"]=[[
-                                    '(\s*C\d{1,2}\s*)'+       # C1 C10
-                                '|'+'(\s*P\d{1,2}\s*)'        # P1 P10
+                                    '(\s*C\d{1,2}\s*)'       # C1 C10
+                                # '|'+'(\s*P\d{1,2}\s*)'        # P1 P10
                                 ], 6]
         self.patternDic["柱符号2"]=[[
                                     '(\s*\S*\d{1,2}C\d{1,2}\s*)'+     # 10C1 10C10
@@ -122,9 +123,9 @@ class PatternCheck:
         self.patternDic["フープ筋"]=[[
                                 '(\s*\d{1}-\w+\d{2}@\d+\s*)'+         # 2-D13@200 2-TA13@150
                                 '|'+'(\s*-\w+\d{2}@\d+\s*)' +          # D13@200
-                                '|'+'(\s*-\w+\d{2}@\s*\d+\s*)' +     # D13@ 200
-                                '|'+'(\s*\d{1}\s*-\w+\d{2}@\d+\s*)' +   # 5 -D13@200
-                                '|'+'(\s*\d{1}\s*-\w+\d{2}@\s*\d+\s*)'    # 5 -D13@ 200
+                                '|'+'(\s*-\w+\d{2}\s*@\s*\d+\s*)' +     # D13@ 200
+                                '|'+'(\s*\d{1}\s*-\w+\d{2}\s*@\d+\s*)' +   # 5 -D13@200
+                                '|'+'(\s*\d{1}\s*-\w+\d{2}\s*@\s*\d+\s*)'    # 5 -D13@ 200
                                 ], 12]
         
         self.patternDic["腹筋"]=[[
@@ -207,7 +208,6 @@ class PatternCheck:
                                 return ""
                             #end if
                         else:
-                            
                             return key
                         #end if
                     #end if
@@ -320,8 +320,11 @@ if __name__ == '__main__':
     data1.append("元端")
     data1.append("先端")
     data1.append("1通・3通端")
+    data1.append("Y1 端")
+    data1.append("Y2 端")
+    data1.append("全断")
     
-    # 項目名1
+    # 項目名1Y1 端,Y2 端,Y3 端
     data1.append("符号名")
     data1.append("コンクリート")
     data1.append("主筋")
@@ -352,12 +355,13 @@ if __name__ == '__main__':
     # 腹筋
     data1.append("4-D13")
     data1.append(" 4-D10 ")
-    # フープ筋
+    # フープ筋-TA13 @100
     data1.append("2-D13@200")
     data1.append("2-TA13@150")
     data1.append("-D13@150")
     data1.append("5 -K16@150")
     data1.append("-D13@ 150")
+    data1.append("-TA13 @100")
     
     # 柱符号
     data1.append("C1")
