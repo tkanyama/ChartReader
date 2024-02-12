@@ -428,6 +428,9 @@ class ChartReader:
 
     # #end def
 
+
+
+
     def ElementFinder(self,PageWordData):
         """
         
@@ -633,7 +636,8 @@ class ChartReader:
             return BeamData,ColumnData
         #end if
         # 各部材の項目名Itemに名称を追加
-        ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり","柱符号","柱符号2","腹筋","フープ筋","材料"]
+        ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり",
+                    "柱符号","柱符号2","腹筋","フープ筋","材料"]
         for Item in ItemName:
             if len(locals()[Item])>0:
                 for j in range(len(locals()[Item])):
@@ -643,7 +647,7 @@ class ChartReader:
         #next
 
         # フープ筋と材料については表の左側の項目名を追加（あば筋、帯筋等）
-        ItemName = ["フープ筋","材料"]
+        ItemName = ["主筋","フープ筋","材料"]
         for Item in ItemName:
             if len(locals()[Item])>0:
                 # flag = [0]*len(locals()[Item])
@@ -673,7 +677,16 @@ class ChartReader:
                     # 項目名の決定
                     if len(d2) == 1:
                         # 近くにある項目名がひとつの場合はそれを選択する
-                        locals()[Item][j]["item"] = d2[0]["text"]
+                        if Item == "主筋" :
+                            if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
+                            # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
+                                locals()[Item][j]["item"] = d2[0]["text"]
+                            else:
+                                locals()[Item][j]["item"] = ""
+                            #end if
+                        else:
+                            locals()[Item][j]["item"] = d2[0]["text"]
+                        #end if
                         # flag[j] = 1
                     elif len(d2) > 1:
                         # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
@@ -687,31 +700,24 @@ class ChartReader:
                             #end if
                         #next
                         if im > -1 :
-                            locals()[Item][j]["item"] = d2[im]["text"]
+                            if Item == "主筋":
+                                if not("主" in d2[im]["text"] and "筋" in d2[im]["text"]) :
+                                # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[im]["text"]) == None :
+                                    locals()[Item][j]["item"] = d2[im]["text"]
+                                else:
+                                    locals()[Item][j]["item"] = ""
+                                #end if
+                            else:
+                                locals()[Item][j]["item"] = d2[im]["text"]
+                            #end if
+                            # locals()[Item][j]["item"] = d2[im]["text"]
                             # flag[j] = 1
                         #end if
                     #end if
-                    #end if
-                #next
+                #next for j in range(len(locals()[Item])):
             #end if
-        #next
+        #next for Item in ItemName:
         a=0
-
-                #next
-            # if Section[i][0]["rmax"] == -1:
-            #     for j in range(len(locals()[Item])):
-            #         dataDic1 = locals()[Item][j]
-            #         row = dataDic1["row"]
-            #         xm = dataDic1["xm"]
-            #         if row > row0 and abs(xm - xm0) < xpitch*1.5:
-            #             for k in range(len(Section[i])):
-            #                 Section[i][k]["rmax"] = row - 1
-            #             #next
-            #             break
-            #         #end if
-            #     #next
-            # #end if
-        #next
 
         # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
         floorXmin1= 10000.0
@@ -1748,7 +1754,7 @@ class ChartReader:
                 #next
                 
                 # 梁断面位置の代わりに梁断面位置または小梁符号または片持梁符号があった場合も別の梁部材表であると判断し、データの終端行位置をその行−1とする。
-                ItemName = ["梁断面位置","小梁符号","片持梁符号","壁"]
+                ItemName = ["柱符号","梁符号","梁断面位置","小梁符号","片持梁符号","壁"]
                 for Item in ItemName:
                     if Section[i][0]["rmax"] == -1:
                         for j in range(len(locals()[Item])):
@@ -2016,6 +2022,8 @@ class ChartReader:
                     
                     # 主筋の数を1列にあるデータ数とする。
                     kindSameNMax = len(kindSameN2["主筋"])
+                    # kindSameNMax = len(kindSameN2["断面寸法"])
+
 
                     # # 材料は主筋とフープ筋の2カ所に記載される場合があり、そのときは材料1と材料2に分ける。
                     # if len(材料)>0:
@@ -2313,7 +2321,7 @@ if __name__ == '__main__':
     # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力のコピー.pdf")
     
     pdffname.append("02構造図.pdf")
-    # pdffname.append("02一貫計算書（一部）.pdf")
+    pdffname.append("02一貫計算書（一部）.pdf")
 
 
     # pdfname = "構造図テストデータ.pdf"

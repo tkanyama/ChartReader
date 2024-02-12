@@ -45,7 +45,8 @@ class PatternCheck:
                                 ] , 8 ] # 文字数制限
         self.patternDic["小梁符号"]=[[
                                     '(\s*B\d{1,2}\D*\s*)' +         # B1 B20 B1A B20A
-                                '|'+'(\s*(C|F)B\d{1,2}\D*\s*)'         # CB1 CB10 CB1A CB10A FB1 FB10 FB1A FB10A
+                                '|'+'(\s*(C|F)B\d{1,2}\D*\s*)'        # CB1 CB10 CB1A CB10A FB1 FB10 FB1A FB10A
+                                        # CB1 CB10 CB1A CB10A FB1 FB10 FB1A FB10A
                                 ] , 8 ] # 文字数制限
         self.patternDic["梁符号2"]=[[
                                     '(\s*\d{1,2}G\d{1,2}\D*\s*)'+   # 9G1 12G12 9G1A 12G12A
@@ -57,7 +58,9 @@ class PatternCheck:
                                 ], 10]
         self.patternDic["片持梁符号"]=[[
                                     '(\s*CG\d{1,2}\D*\s*)' +         # CG1 CG20 CG1A CG20A
-                                '|'+'(\s*FCG\d{1,2}\D*\s*)'         # FCG1 FCG10 FCG1A 
+                                '|'+'(\s*FCG\d{1,2}\D*\s*)' +       # FCG1 FCG10 FCG1A 
+                                '|'+'(\s*FCG\d{1,2}\D*\s*-\d*\s*)' +        # FCG-1
+                                '|'+'(\s*CG\d{1,2}\D*\s*-\d*\s*)'         # CG1-1
                                 ] , 8 ] # 文字数制限
         self.patternDic["壁"]=[[
                                     '(\s*W\d{1,2}\D*\s*)' +         # W15,W15a
@@ -79,7 +82,8 @@ class PatternCheck:
                                     '|'+'かぶり・あき'+
                                     '|'+'あばら筋'+
                                     '|'+'帯筋'+'|'+'帯筋'+
-                                    '|'+'仕口部帯筋'
+                                    '|'+'仕口部帯筋'+
+                                    '|'+'芯鉄筋'
                                 ], 10]
         self.patternDic["構造計算書"]=[[
                                     '構造計算書'
@@ -292,6 +296,8 @@ if __name__ == '__main__':
     data1.append("CG20")
     data1.append("FCG1A")
     data1.append("FCG20A")
+    data1.append("FCG20-1")
+    data1.append("FCG20A-1")
     # 壁
     data1.append("W15")
     data1.append("W15a")
