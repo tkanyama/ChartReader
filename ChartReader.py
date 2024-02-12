@@ -7,6 +7,7 @@
 # pip install pdfplumber
 import pdfplumber
 from io import StringIO
+import time
 
 # pip install numpy matplotlib scipy
 import numpy as np
@@ -2312,7 +2313,9 @@ class ChartReader:
 #======================================================================================
 
 if __name__ == '__main__':
-    
+
+    time_sta = time.time()  # 開始時刻の記録
+
     CR = ChartReader()
 
     Folder1 = "PDF"
@@ -2360,5 +2363,9 @@ if __name__ == '__main__':
 
         #end if
     #next
+    
+    time_end = time.time()  # 終了時刻の記録
+    print("処理時間 = {} sec".format(time_end - time_sta))
+    
 #end if
     
