@@ -8,6 +8,7 @@
 import pdfplumber
 from io import StringIO
 import time
+import pickle
 
 # pip install numpy matplotlib scipy
 import numpy as np
@@ -424,7 +425,7 @@ class ChartReader:
     #============================================================================
     #　複数ページのPDFファイルから梁データまたは柱データを抽出する関数
     #============================================================================
-    def Read_Elements_from_pdf(self, pdf_path):
+    def Read_Members_from_pdf(self, pdf_path):
 
         # CR = ChartReader()
         with pdfplumber.open(pdf_path) as pdf:
@@ -436,9 +437,9 @@ class ChartReader:
                 if pageN >= 0:
                     print("page = {}".format(pageN+1),end="")
 
-                    page_lines = self.Read_Word_From_Page(page)
+                    # page_lines = self.Read_Word_From_Page(page)
 
-                    BeamData1, ColumnData1 = CR.ElementFinder(page_lines)
+                    BeamData1, ColumnData1 = self.ElementFinder(page)
 
                     print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
                     if len(BeamData1) > 0:
@@ -461,13 +462,11 @@ class ChartReader:
     # #end def
 
 
+
     #============================================================================
-    #　PDFのページから抽出された単語データから梁データまたは柱データを抽出する関数
+    #　PDFのページから単語データを抽出する関数
     #============================================================================
-    def ElementFinder(self,PageWordData):
-        """
-        
-        """
+    def FindMember(self,PageWordData):
 
         # 文字列パターンを用いてデータの種類を判別するオブジェクトの作成
         pCheck = PatternCheck()
@@ -484,7 +483,7 @@ class ChartReader:
             wordsByKind[keyname] = []
         #next
 
-        ypitch = 0
+        self.ypitch = 0
         for i, LineWord in enumerate(PageWordData):
             # line = []
             for j, word in enumerate(LineWord):
@@ -502,8 +501,8 @@ class ChartReader:
                     word2["y1"] = word["y1"] 
                     # line.append(word2)
                     wordsByKind[kind].append(word2)
-                    if abs(word["y0"]-word["y1"])>ypitch:
-                        ypitch = abs(word["y0"]-word["y1"])
+                    if abs(word["y0"]-word["y1"])>self.ypitch:
+                        self.ypitch = abs(word["y0"]-word["y1"])
                     #end if
                 #end if
             #next
@@ -512,56 +511,56 @@ class ChartReader:
             # #end if
         #next
 
-        rowmax = len(PageWordData)
+        self.rowmax = len(PageWordData)
 
-        梁符号1 = wordsByKind["梁符号1"]
-        梁符号2 = wordsByKind["梁符号2"]
-        梁符号 = []
-        if len(梁符号1) > 0:
-            梁符号 = 梁符号1
+        self.梁符号1 = wordsByKind["梁符号1"]
+        self.梁符号2 = wordsByKind["梁符号2"]
+        self.梁符号 = []
+        if len(self.梁符号1) > 0:
+            self.梁符号 = self.梁符号1
         else:
-            if len(梁符号2) > 0:
+            if len(self.梁符号2) > 0:
                 flag = False
-                for d in 梁符号2:
+                for d in self.梁符号2:
                     if "FG" in d["text"]:
                         flag = True
                     #end if
                 #next
                 if flag:
-                    梁符号 = 梁符号2
-                    梁符号2 = []
+                    self.梁符号 = self.梁符号2
+                    self.梁符号2 = []
                 #end if
             #end if
         #end if
-        for i in range(len(梁符号)):
-            梁符号[i]["kind"] = "梁符号"
+        for i in range(len(self.梁符号)):
+            self.梁符号[i]["kind"] = "梁符号"
         #next
 
-        小梁符号 = wordsByKind["小梁符号"]
-        片持梁符号 = wordsByKind["片持梁符号"]
-        項目名1 = wordsByKind["項目名1"]
-        項目名2 = wordsByKind["項目名2"]
+        self.小梁符号 = wordsByKind["小梁符号"]
+        self.片持梁符号 = wordsByKind["片持梁符号"]
+        self.項目名1 = wordsByKind["項目名1"]
+        self.項目名2 = wordsByKind["項目名2"]
         # 主筋項目名 = wordsByKind["主筋項目名"]
         # 材料項目名 = wordsByKind["材料項目名"]
-        断面寸法 = wordsByKind["断面寸法"]
-        コンクリート強度 = wordsByKind["コンクリート強度"]
-        フープ筋 = wordsByKind["フープ筋"]
-        主筋 = wordsByKind["主筋"]
-        腹筋 = wordsByKind["腹筋"]
-        材料 = wordsByKind["材料"]
-        階 = wordsByKind["階"]
-        壁 = wordsByKind["壁"]
-        日付 = wordsByKind["日付"]
-        かぶり = wordsByKind["かぶり"]
-        柱符号 = wordsByKind["柱符号"]
-        柱符号2 = wordsByKind["柱符号2"]
-        構造計算書 = wordsByKind["構造計算書"]
-        断面リスト = wordsByKind["断面リスト"]
+        self.断面寸法 = wordsByKind["断面寸法"]
+        self.コンクリート強度 = wordsByKind["コンクリート強度"]
+        self.フープ筋 = wordsByKind["フープ筋"]
+        self.主筋 = wordsByKind["主筋"]
+        self.腹筋 = wordsByKind["腹筋"]
+        self.材料 = wordsByKind["材料"]
+        self.階 = wordsByKind["階"]
+        self.壁 = wordsByKind["壁"]
+        self.日付 = wordsByKind["日付"]
+        self.かぶり = wordsByKind["かぶり"]
+        self.柱符号 = wordsByKind["柱符号"]
+        self.柱符号2 = wordsByKind["柱符号2"]
+        self.構造計算書 = wordsByKind["構造計算書"]
+        self.断面リスト = wordsByKind["断面リスト"]
 
         itemXmin = 10000
         itemYmin = 10000
-        if len(梁符号)>0:
-            for d in 梁符号:
+        if len(self.梁符号)>0:
+            for d in self.梁符号:
                 x0 = d["x0"]
                 y0 = d["y0"]
                 if x0 < itemXmin:
@@ -572,65 +571,65 @@ class ChartReader:
                 #end if
             #next
 
-            梁断面位置 = wordsByKind["梁断面位置"]
-            if len(梁断面位置) > 1:
+            self.梁断面位置 = wordsByKind["梁断面位置"]
+            if len(self.梁断面位置) > 1:
                 # 梁断面位置のうち梁符号より上にあるものは削除する。
-                梁断面位置2 = []
-                for d in 梁断面位置:
+                self.梁断面位置2 = []
+                for d in self.梁断面位置:
                     y1 = d["y1"]
                     if y1 > itemYmin:
-                        梁断面位置2.append(d)
+                        self.梁断面位置2.append(d)
                     #end if
                 #next
-                梁断面位置 = 梁断面位置2
+                self.梁断面位置 = self.梁断面位置2
                 
                 
-                beamPitch = 0
-                xm1 = 梁断面位置[0]["xm"]
-                x0 = 梁断面位置[0]["x0"]
+                self.beamPitch = 0
+                xm1 = self.梁断面位置[0]["xm"]
+                x0 = self.梁断面位置[0]["x0"]
                 if x0 < itemXmin:
                     itemXmin = x0
                 #end if
-                row1 = 梁断面位置[0]["row"]
-                for i in range(1,len(梁断面位置)):
-                    xm2 = 梁断面位置[i]["xm"]
-                    row2 = 梁断面位置[i]["row"]
+                row1 = self.梁断面位置[0]["row"]
+                for i in range(1,len(self.梁断面位置)):
+                    xm2 = self.梁断面位置[i]["xm"]
+                    row2 = self.梁断面位置[i]["row"]
                     
                     if row2 == row1 :
-                        beamPitch = abs(xm1 - xm2)
+                        self.beamPitch = abs(xm1 - xm2)
                         break
                     #end if
                 #next
             
             else:
                 # 表データが1列の場合は表の横ピッチは72とする。
-                beamPitch = 72
+                self.beamPitch = 72
             #end if
         else:
-            梁断面位置 = []
+            self.梁断面位置 = []
         #end if ja_cvu_normalizer.normalize(Line) 
             
 
-        if len(梁断面位置):
-            梁断面位置2 = []
-            for data in 梁断面位置:
+        if len(self.梁断面位置):
+            self.梁断面位置2 = []
+            for data in self.梁断面位置:
                 data["text"] = ja_cvu_normalizer.normalize(data["text"]) 
-                梁断面位置2.append(data)
+                self.梁断面位置2.append(data)
             #next
-            梁断面位置 = 梁断面位置2
+            self.梁断面位置 = self.梁断面位置2
 
             # 梁断面位置の下側に主筋もフープ筋ないものは削除する。
-            梁断面位置2 = []
-            for d in 梁断面位置:
+            self.梁断面位置2 = []
+            for d in self.梁断面位置:
                 # print(d["text"])
                 row = d["row"]
                 xm = d["xm"]
                 flag = False
-                if len(主筋)>0:
-                    for d1 in 主筋:
+                if len(self.主筋)>0:
+                    for d1 in self.主筋:
                         row1 = d1["row"]
                         xm1 = d1["xm"]
-                        if row < row1 and abs(xm - xm1)<beamPitch * 2:
+                        if row < row1 and abs(xm - xm1)<self.beamPitch * 2:
                             flag = True
                             break
                         #end if
@@ -638,11 +637,11 @@ class ChartReader:
                 #end if
                 
                 if flag == False:
-                    if len(フープ筋)>0:
-                        for d1 in フープ筋:
+                    if len(self.フープ筋)>0:
+                        for d1 in self.フープ筋:
                             row1 = d1["row"]
                             xm1 = d1["xm"]
-                            if row < row1 and abs(xm - xm1)<beamPitch * 2:
+                            if row < row1 and abs(xm - xm1)<self.beamPitch * 2:
                                 flag = True
                                 break
                             #end if
@@ -650,14 +649,14 @@ class ChartReader:
                     #end if
                 #end if
                 if flag :
-                    梁断面位置2.append(d)
+                    self.梁断面位置2.append(d)
                 #end if
             #next
-            梁断面位置 = 梁断面位置2
+            self.梁断面位置 = self.梁断面位置2
 
         # 梁データが無い場合は柱符号で項目名の境界[itemXmin]を決定する。
-        if len(柱符号)>0 and itemXmin == 10000:
-            for d in 柱符号:
+        if len(self.柱符号)>0 and itemXmin == 10000:
+            for d in self.柱符号:
                 x0 = d["x0"]
                 if x0 < itemXmin:
                     itemXmin = x0
@@ -667,9 +666,9 @@ class ChartReader:
         
         if itemXmin == 10000:
             itemXmin = 72*2
-        #end if
+        #end if                         getattr(self, "a")
         
-        登録外項目 = []
+        self.登録外項目 = []
         itemKey = []
         for i, LineWord in enumerate(PageWordData):
             word = LineWord[0]
@@ -677,34 +676,34 @@ class ChartReader:
             x1 = word["x1"]
             if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and x1<itemXmin:
                 # if not(text in itemKey):
-                登録外項目.append(word)
+                self.登録外項目.append(word)
                 # itemKey.append(text)
             #end if
         #next
 
         # PDFが構造計算書の場合で「断面リスト」のヘッダーがない場合はそのページの処理を中止する。
-        if len(構造計算書)>0:
-            if len(断面リスト)==0 :
-                BeamData = []
-                ColumnData = []
-                return BeamData,ColumnData
+        if len(self.構造計算書)>0:
+            if len(self.断面リスト)==0 :
+                # BeamData = []
+                # ColumnData = []
+                return False
             #end if
         #end if
 
         # 主筋データが無い場合、又は、梁符号も柱符号も両方がない場合はそのページの処理を中止する。
-        if len(主筋) == 0 or (len(梁符号) == 0 and len(柱符号) == 0):
-            BeamData = []
-            ColumnData = []
-            return BeamData,ColumnData
+        if len(self.主筋) == 0 or (len(self.梁符号) == 0 and len(self.柱符号) == 0):
+            # BeamData = []
+            # ColumnData = []
+            return False
         #end if
 
         # 各部材の項目名Itemに""を追加
         ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり",
                     "柱符号","柱符号2","腹筋","フープ筋","材料","片持梁符号"]
         for Item in ItemName:
-            if len(locals()[Item])>0:
-                for j in range(len(locals()[Item])):
-                    locals()[Item][j]["item"] = ""
+            if len(getattr(self, Item))>0:
+                for j in range(len(getattr(self, Item))):
+                    getattr(self, Item)[j]["item"] = ""
                 #next
             #end if
         #next
@@ -712,11 +711,11 @@ class ChartReader:
         # フープ筋と材料については表の左側の項目名を追加（あば筋、帯筋等）
         ItemName = ["フープ筋","材料"]
         for Item in ItemName:
-            if len(locals()[Item])>0:
+            if len(getattr(self, Item))>0:
                 # flag = [0]*len(locals()[Item])
-                for j in range(len(locals()[Item])):
+                for j in range(len(getattr(self, Item))):
                     # if flag[j] == 0:
-                    dataDic1 = locals()[Item][j]
+                    dataDic1 = getattr(self, Item)[j]
                     row = dataDic1["row"]
                     xm = dataDic1["xm"]
                     left0 = dataDic1["x0"]
@@ -724,13 +723,13 @@ class ChartReader:
                     top0 = dataDic1["y0"]
                     bottom0 = dataDic1["y1"]
                     d2 = []
-                    for d in 項目名1:
+                    for d in self.項目名1:
                         row1 = d["row"]
                         left1 = d["x0"]
                         right1 = d["x1"]
                         top1 = d["y0"]
                         bottom1 = d["y1"]
-                        if right1<left0 and top1-ypitch*2.0 < top0 and bottom1+ypitch*2.0 > bottom0:
+                        if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0:
                             flag = False
                             if "筋" in d["text"]:
                                 flag = True
@@ -747,14 +746,14 @@ class ChartReader:
                             #end if
                         #end if
                     #next
-                    if len(登録外項目)>0:
-                        for d in 登録外項目:
+                    if len(self.登録外項目)>0:
+                        for d in self.登録外項目:
                             row1 = d["row"]
                             left1 = d["x0"]
                             right1 = d["x1"]
                             top1 = d["y0"]
                             bottom1 = d["y1"]
-                            if right1<left0 and top1-ypitch*1.0 < top0 and bottom1+ypitch*1.0 > bottom0:
+                            if right1<left0 and top1-self.ypitch*1.0 < top0 and bottom1+self.ypitch*1.0 > bottom0:
                             
                                 d2.append(d)
                                 #end if
@@ -767,7 +766,7 @@ class ChartReader:
                     if len(d2) == 1:
                         # 近くにある項目名がひとつの場合はそれを選択する
                         
-                        locals()[Item][j]["item"] = d2[0]["text"]
+                        getattr(self, Item)[j]["item"] = d2[0]["text"]
                         
                     elif len(d2) > 1:
                         # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
@@ -782,22 +781,22 @@ class ChartReader:
                         #next
                         if im > -1 :
                             
-                            locals()[Item][j]["item"] = d2[im]["text"]
+                            getattr(self, Item)[j]["item"] = d2[im]["text"]
                             
                         #end if
                     #end if
-                #next for j in range(len(locals()[Item])):
+                #next for j in range(len(getattr(self, Item))):
             #end if
         #next for Item in ItemName:
         a=0
 
         ItemName = ["主筋"]
         for Item in ItemName:
-            if len(locals()[Item])>0:
-                # flag = [0]*len(locals()[Item])
-                for j in range(len(locals()[Item])):
+            if len(getattr(self, Item))>0:
+                # flag = [0]*len(getattr(self, Item))
+                for j in range(len(getattr(self, Item))):
                     # if flag[j] == 0:
-                    dataDic1 = locals()[Item][j]
+                    dataDic1 = getattr(self, Item)[j]
                     row = dataDic1["row"]
                     xm = dataDic1["xm"]
                     left0 = dataDic1["x0"]
@@ -805,13 +804,13 @@ class ChartReader:
                     top0 = dataDic1["y0"]
                     bottom0 = dataDic1["y1"]
                     d2 = []
-                    for d in 項目名1:
+                    for d in self.項目名1:
                         row1 = d["row"]
                         left1 = d["x0"]
                         right1 = d["x1"]
                         top1 = d["y0"]
                         bottom1 = d["y1"]
-                        if right1<left0 and top1-ypitch*2.0 < top0 and bottom1+ypitch*2.0 > bottom0:
+                        if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0:
                             if "筋" in d["text"] :
                                 d2.append(d)
                             #end if
@@ -822,9 +821,9 @@ class ChartReader:
                     if len(d2) == 1:
                         if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
                         # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
-                            locals()[Item][j]["item"] = d2[0]["text"]
+                            getattr(self, Item)[j]["item"] = d2[0]["text"]
                         else:
-                            locals()[Item][j]["item"] = ""
+                            getattr(self, Item)[j]["item"] = ""
                         #end if
                     elif len(d2) > 1:
                         # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
@@ -840,26 +839,26 @@ class ChartReader:
                         if im > -1 :
                             if not("主" in d2[im]["text"] and "筋" in d2[im]["text"]) :
                             # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[im]["text"]) == None :
-                                locals()[Item][j]["item"] = d2[im]["text"]
+                                getattr(self, Item)[j]["item"] = d2[im]["text"]
                             else:
-                                locals()[Item][j]["item"] = ""
+                                getattr(self, Item)[j]["item"] = ""
                             #end if
                             
                         #end if
                     #end if
-                #next for j in range(len(locals()[Item])):
+                #next for j in range(len(getattr(self, Item))):
             #end if
         #next for Item in ItemName:
         
 
         # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
         floorXmin1= 10000.0
-        if len(梁符号)>0:
-            floorXmin1 = 梁符号[0]["x0"]
+        if len(self.梁符号)>0:
+            floorXmin1 = self.梁符号[0]["x0"]
         #end if
         floorXmin2 = 10000.0
-        if len(柱符号)>0:
-            floorXmin2 = 柱符号[0]["x0"]
+        if len(self.柱符号)>0:
+            floorXmin2 = self.柱符号[0]["x0"]
         #end if
         if floorXmin1 < floorXmin2:
             floorXmin = floorXmin1 - 36
@@ -868,112 +867,120 @@ class ChartReader:
         #end if
 
 
-        if len(階) > 0:
+        if len(self.階) > 0:
             # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
             階2 = []
-            for d in 階:
-                if d["row"] > 3 and d["row"] < rowmax-3 and d["x1"] < floorXmin:
+            for d in self.階:
+                if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
                     階2.append(d)
                 #end if
             #next
-            階 = 階2        
+            self.階 = 階2        
             
-            if len(階) > 0:
+            if len(self.階) > 0:
                 # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
                 階2 = []
-                row0 = 階[0]["row"]
-                xm0 = 階[0]["xm"]
-                階2.append(階[0])
-                for i in range(1, len(階)):
-                    row = 階[i]["row"]
-                    xm = 階[i]["xm"]
+                row0 = self.階[0]["row"]
+                xm0 = self.階[0]["xm"]
+                階2.append(self.階[0])
+                for i in range(1, len(self.階)):
+                    row = self.階[i]["row"]
+                    xm = self.階[i]["xm"]
                     if row - row0 > 6 or abs(xm - xm0) > 72:
-                        階2.append(階[i])
+                        階2.append(self.階[i])
                     else:
-                        階2[i-1]["text"] += " , " + 階[i]["text"]
+                        階2[i-1]["text"] += " , " + self.階[i]["text"]
                     #end if
                     row0 = row
                     xm0 = xm
                 #end if
-                階 = 階2
+                self.階 = 階2
             #end if
         #end if
 
         # かぶりデータを行で並び替え
         L2 = []
-        for i in range(len(かぶり)):
-            L2.append(かぶり[i]["row"])
+        for i in range(len(self.かぶり)):
+            L2.append(self.かぶり[i]["row"])
         #next
         VArray = np.array(L2)      # リストをNumpyの配列に変換
         index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
         L22 = []
         for j in range(len(index1)):
-            L22.append(かぶり[index1[j]])
+            L22.append(self.かぶり[index1[j]])
         #next
-        かぶり = L22
+        self.かぶり = L22
 
+        return True
+    
+    #end def
+
+    #============================================================================
+    #　PDFのページから抽出された単語データから梁データを作成する関数
+    #============================================================================
+    def MakeBeamData(self):
         #===================================
         # 梁部材の抽出
         #===================================
         
-        dn = len(梁断面位置)
+        dn = len(self.梁断面位置)
         Section = []
         Section2 = []
         BeamData = []
-        if dn > 0 and len(梁符号) > 0:
+        if dn > 0 and len(self.梁符号) > 0:
             flag = [0] * dn
             for i in range(dn):
                 if flag[i] == 0 :
-                    text0 = 梁断面位置[i]["text"]
-                    row0 = 梁断面位置[i]["row"]  # 行位置を記憶
-                    xm0 = 梁断面位置[i]["xm"]    # 梁断面位置Ｘ座標を記憶
-                    y00 = 梁断面位置[i]["y0"]  # 行位置を記憶
+                    text0 = self.梁断面位置[i]["text"]
+                    row0 = self.梁断面位置[i]["row"]  # 行位置を記憶
+                    xm0 = self.梁断面位置[i]["xm"]    # 梁断面位置Ｘ座標を記憶
+                    y00 = self.梁断面位置[i]["y0"]  # 行位置を記憶
                     
                     sn2 = []
                     if "全断" in text0 :
-                        Section.append([梁断面位置[i]])
+                        Section.append([self.梁断面位置[i]])
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         Section2.append(sn2)
                         # Section2.append([[梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]]])
                         flag[i] = 1
                     elif "端部" in text0 or "両端" in text0 :
-                        sn = [梁断面位置[i]]
+                        sn = [self.梁断面位置[i]]
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
                         flag[i] = 1
                         # sn2 = []
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]    # 梁断面位置Ｘ座標を記憶
-                                if text1 == "中央" and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]    # 梁断面位置Ｘ座標を記憶
+                                if text1 == "中央" and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*1.2:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -984,35 +991,35 @@ class ChartReader:
                         Section.append(sn)
                         Section2.append(sn2)
                     elif "端部" in text0 or "両端" in text0 :
-                        sn = [梁断面位置[i]]
+                        sn = [self.梁断面位置[i]]
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
                         flag[i] = 1
                         # sn2 = []
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]    # 梁断面位置Ｘ座標を記憶
-                                if text1 == "中央" and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]    # 梁断面位置Ｘ座標を記憶
+                                if text1 == "中央" and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*1.2:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1023,35 +1030,35 @@ class ChartReader:
                         Section.append(sn)
                         Section2.append(sn2)
                     elif "元端" in text0  :
-                        sn = [梁断面位置[i]]
+                        sn = [self.梁断面位置[i]]
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
                         flag[i] = 1
                         # sn2 = []
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if text1 == "先端" and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if text1 == "先端" and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*1.2:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1062,35 +1069,35 @@ class ChartReader:
                         Section.append(sn)
                         Section2.append(sn2)
                     elif "左端" in text0 :
-                        sn = [梁断面位置[i]]
+                        sn = [self.梁断面位置[i]]
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
                         flag[i] = 1
                         # sn2 = []
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*1.2:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1100,20 +1107,20 @@ class ChartReader:
                         #next
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if "右端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*2.4:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if "右端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*2.4:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1124,35 +1131,35 @@ class ChartReader:
                         Section.append(sn)
                         Section2.append(sn2)
                     elif "通端" in text0 :
-                        sn = [梁断面位置[i]]
+                        sn = [self.梁断面位置[i]]
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
                         flag[i] = 1
                         # sn2 = []
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*1.2:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1162,20 +1169,20 @@ class ChartReader:
                         #next
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if "通端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*2.4:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if "通端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*2.4:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1187,35 +1194,35 @@ class ChartReader:
                         Section2.append(sn2)
 
                     elif "端" in text0 :
-                        sn = [梁断面位置[i]]
+                        sn = [self.梁断面位置[i]]
                         dic = {}
-                        dic["kind"] = 梁断面位置[i]["kind"]
-                        dic["text"] = 梁断面位置[i]["text"]
+                        dic["kind"] = self.梁断面位置[i]["kind"]
+                        dic["text"] = self.梁断面位置[i]["text"]
                         dic["number"] = i
-                        dic["row"] = 梁断面位置[i]["row"]
-                        dic["xm"] = 梁断面位置[i]["xm"]
-                        dic["y0"] = 梁断面位置[i]["y0"]
-                        dic["item"] = 梁断面位置[i]["item"]
+                        dic["row"] = self.梁断面位置[i]["row"]
+                        dic["xm"] = self.梁断面位置[i]["xm"]
+                        dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
                         flag[i] = 1
                         # sn2 = []
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*1.2:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if "中央" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*1.2:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1225,20 +1232,20 @@ class ChartReader:
                         #next
                         for j in range(dn):
                             if flag[j] == 0:
-                                text1 = 梁断面位置[j]["text"]
-                                row1 = 梁断面位置[j]["row"]  # 行位置を記憶
-                                xm1 = 梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
-                                y10 = 梁断面位置[j]["y0"]
-                                if "端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < beamPitch*2.4:
-                                    sn.append(梁断面位置[j])
+                                text1 = self.梁断面位置[j]["text"]
+                                row1 = self.梁断面位置[j]["row"]  # 行位置を記憶
+                                xm1 = self.梁断面位置[j]["xm"]    # 梁断面位置Ｘ座標を記憶
+                                y10 = self.梁断面位置[j]["y0"]
+                                if "端" in text1 and abs(y00-y10)<0.5 and abs(xm0-xm1) < self.beamPitch*2.4:
+                                    sn.append(self.梁断面位置[j])
                                     dic = {}
-                                    dic["kind"] = 梁断面位置[j]["kind"]
-                                    dic["text"] = 梁断面位置[j]["text"]
+                                    dic["kind"] = self.梁断面位置[j]["kind"]
+                                    dic["text"] = self.梁断面位置[j]["text"]
                                     dic["number"] = j
-                                    dic["row"] = 梁断面位置[j]["row"]
-                                    dic["xm"] = 梁断面位置[j]["xm"]
-                                    dic["y0"] = 梁断面位置[j]["y0"]
-                                    dic["item"] = 梁断面位置[j]["item"]
+                                    dic["row"] = self.梁断面位置[j]["row"]
+                                    dic["xm"] = self.梁断面位置[j]["xm"]
+                                    dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
                                     flag[j] = 1
@@ -1286,8 +1293,8 @@ class ChartReader:
                 ItemName = ["柱符号","小梁符号","片持梁符号","壁"]
                 for Item in ItemName:
                     if Section[i][0]["rmax"] == -1:
-                        for j in range(len(locals()[Item])):
-                            dataDic1 = locals()[Item][j]
+                        for j in range(len(getattr(self, Item))):
+                            dataDic1 = getattr(self, Item)[j]
                             row = dataDic1["row"]
                             xm = dataDic1["xm"]
                             if row > row0 and abs(xm - xm0) < xpitch*1.5:
@@ -1303,7 +1310,7 @@ class ChartReader:
                 # 最後までデータの終端行位置が-1の場合は別の梁部材表がないと判断し、データの終端行位置をページの最終行-3とする。
                 if Section[i][0]["rmax"] == -1:
                     for j in range(len(Section[i])):
-                        Section[i][j]["rmax"] = rowmax 
+                        Section[i][j]["rmax"] = self.rowmax 
                     #next
                 #end if
             #next
@@ -1335,14 +1342,14 @@ class ChartReader:
 
                 flag1 = True
                 dd = []
-                for k,d1 in enumerate(梁符号):   # ローカル変数を名前で指定する関数
+                for k,d1 in enumerate(self.梁符号):   # ローカル変数を名前で指定する関数
                     xm = d1["xm"]
                     row = d1["row"]
                     if row1 > row  and xm >= xmin and xm <= xmax:
                         dd.append(d1)
                     #end if
                 #next
-                for k,d1 in enumerate(片持梁符号):   # ローカル変数を名前で指定する関数
+                for k,d1 in enumerate(self.片持梁符号):   # ローカル変数を名前で指定する関数
                     xm = d1["xm"]
                     row = d1["row"]
                     if row1 > row  and xm >= xmin and xm <= xmax:
@@ -1409,7 +1416,7 @@ class ChartReader:
                 for Item in ItemName:
                     data = []
                     s2 = []
-                    for k, d1 in enumerate(locals()[Item]):   # ローカル変数を名前で指定する関数
+                    for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                         xm = d1["xm"]
                         row = d1["row"]
                         if row >= row1 and row <= rmax and xm >= xmin and xm <= xmax:
@@ -1480,7 +1487,7 @@ class ChartReader:
                 #======================================================================
                 #   階に各部材を追加する
                 #
-                if len(階)>0:
+                if len(self.階)>0:
                     ItemName2 = ["階"]
                     
                     for j in range(len(Section[i])):
@@ -1489,7 +1496,7 @@ class ChartReader:
                         xm1 = Section[i][0]["xm"]
                         for Item in ItemName2:
                             # data = []
-                            for k, d1 in enumerate(locals()[Item]):   # ローカル変数を名前で指定する関数
+                            for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                                 xm = d1["xm"]
                                 row = d1["row"]
                                 if row >= row1 and row <= rmax and xm < xm1:
@@ -1628,7 +1635,7 @@ class ChartReader:
                             for k in range(1,len(ln)):
                                 n1 = ln[k][0]
                                 y1 = ln[k][1]
-                                if abs(y0-y1) < ypitch*3 :
+                                if abs(y0-y1) < self.ypitch*3 :
                                     ln2.append(ln[k][0])
                                     n0 = ln[k][0]
                                     y0 = ln[k][1]
@@ -1787,7 +1794,7 @@ class ChartReader:
                     break
                 #end if
             #next
-            if len(梁符号2)>0:
+            if len(self.梁符号2)>0:
                 for key in keys:
                     if key == "梁符号2":
                         keys2.append(key)
@@ -1829,7 +1836,14 @@ class ChartReader:
         #next
         BeamData = BeamData2
 
+        return BeamData
+    #end
 
+
+    #============================================================================
+    #　PDFのページから抽出された単語データから柱データを作成する関数
+    #============================================================================
+    def MakeColumnData(self):
         """
         ここからは柱の処理
 
@@ -1844,24 +1858,24 @@ class ChartReader:
         Section = []
         Section2 = []
         ColumnData = []
-        dn = len(柱符号)
+        dn = len(self.柱符号)
         if dn > 0 :
             flag = [0] * dn
             for i in range(dn):
                 if flag[i] == 0 :
-                    text0 = 柱符号[i]["text"]
-                    row0 = 柱符号[i]["row"]  # 行位置を記憶
-                    xm0 = 柱符号[i]["xm"]    # 梁断面位置Ｘ座標を記憶
+                    text0 = self.柱符号[i]["text"]
+                    row0 = self.柱符号[i]["row"]  # 行位置を記憶
+                    xm0 = self.柱符号[i]["xm"]    # 梁断面位置Ｘ座標を記憶
                     sn2 = []
-                    Section.append([柱符号[i]])
+                    Section.append([self.柱符号[i]])
                     dic = {}
-                    dic["kind"] = 柱符号[i]["kind"]
-                    dic["text"] = 柱符号[i]["text"]
+                    dic["kind"] = self.柱符号[i]["kind"]
+                    dic["text"] = self.柱符号[i]["text"]
                     dic["number"] = i
-                    dic["row"] = 柱符号[i]["row"]
-                    dic["xm"] = 柱符号[i]["xm"]
-                    dic["y0"] = 柱符号[i]["y0"]
-                    dic["item"] = 柱符号[i]["item"]
+                    dic["row"] = self.柱符号[i]["row"]
+                    dic["xm"] = self.柱符号[i]["xm"]
+                    dic["y0"] = self.柱符号[i]["y0"]
+                    dic["item"] = self.柱符号[i]["item"]
                     sn2.append([dic])
                     Section2.append(sn2)
                     flag[i] = 1
@@ -1904,8 +1918,8 @@ class ChartReader:
                 ItemName = ["柱符号","梁符号","梁断面位置","小梁符号","片持梁符号","壁"]
                 for Item in ItemName:
                     if Section[i][0]["rmax"] == -1:
-                        for j in range(len(locals()[Item])):
-                            dataDic1 = locals()[Item][j]
+                        for j in range(len(getattr(self, Item))):
+                            dataDic1 = getattr(self, Item)[j]
                             row = dataDic1["row"]
                             xm = dataDic1["xm"]
                             if row > row0 and abs(xm - xm0) < xpitch*5:
@@ -1921,7 +1935,7 @@ class ChartReader:
                 # 最後までデータの終端行位置が-1の場合は別の梁部材表がないと判断し、データの終端行位置をページの最終行-3とする。
                 if Section[i][0]["rmax"] == -1:
                     for j in range(len(Section[i])):
-                        Section[i][j]["rmax"] = rowmax
+                        Section[i][j]["rmax"] = self.rowmax
                     #next
                 #end if
             #next        
@@ -1950,11 +1964,11 @@ class ChartReader:
                 ItemName = ["柱符号2","断面寸法","主筋","フープ筋","かぶり","材料"]
                 
                 for Item in ItemName:
-                    if len(locals()[Item]) > 0:
+                    if len(getattr(self, Item)) > 0:
                         data = []
                         s2 = []
                             
-                        for k, d1 in enumerate(locals()[Item]):   # ローカル変数を名前で指定する関数
+                        for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                             xm = d1["xm"]
                             row = d1["row"]
                             if row >= row1-2 and row <= rmax and xm >= xmin and xm <= xmax:
@@ -2015,12 +2029,12 @@ class ChartReader:
                                 #end if
                             #end if :(if len(data) == 1:)
                                         
-                    #end if :(if len(locals()[Item]) > 0:)
+                    #end if :(if len(getattr(self, Item)) > 0:)
                     
                 #next :(for Item in ItemName:)
                                             
 
-                if len(階)>0:
+                if len(self.階)>0:
                     ItemName2 = ["階"]
                     
                     for j in range(len(Section[i])):
@@ -2029,7 +2043,7 @@ class ChartReader:
                         xm1 = Section[i][0]["xm"]
                         for Item in ItemName2:
                             # data = []
-                            for k, d1 in enumerate(locals()[Item]):   # ローカル変数を名前で指定する関数
+                            for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                                 xm = d1["xm"]
                                 row = d1["row"]
                                 if row >= row1 and row <= rmax and xm < xm1:
@@ -2217,7 +2231,7 @@ class ChartReader:
                             for k in range(1,len(ln)):
                                 n1 = ln[k][0]
                                 y1 = ln[k][1]
-                                if abs(y0-y1) < ypitch * 2.0 :
+                                if abs(y0-y1) < self.ypitch * 2.0 :
                                     ln2.append(ln[k][0])
                                     n0 = ln[k][0]
                                     y0 = ln[k][1]
@@ -2391,6 +2405,27 @@ class ChartReader:
             
         #next
         ColumnData = ColumnData2
+        
+        return ColumnData
+    
+    #end def
+
+    #============================================================================
+    #　PDFのページから抽出された単語データから梁データまたは柱データを抽出する関数
+    #============================================================================
+    def ElementFinder(self,page):
+        """
+        
+        """
+        PageWordData = self.Read_Word_From_Page(page)
+
+        BeamData = []
+        ColumnData = []
+
+        if self.FindMember(PageWordData):
+            BeamData= self.MakeBeamData()
+            ColumnData = self.MakeColumnData()
+        #end if
 
         return BeamData , ColumnData
     
@@ -2399,7 +2434,7 @@ class ChartReader:
     #============================================================================
     #　梁データまたは柱データをCSVファイルに書き出す関数
     #============================================================================
-    def Save_Element_Data(self, filename, BeamData, ColumnData):
+    def Save_MemberData_Csv(self, filename, BeamData, ColumnData):
 
         ja_cvu_normalizer = JaCvuNormalizer()
     
@@ -2467,7 +2502,45 @@ class ChartReader:
         #end if
     #end def
 
+
+
+    #============================================================================
+    #　梁データまたは柱データをpickleファイルに書き出す関数
+    #============================================================================
+    def Save_MemberData_Picle(self, filename, BeamData, ColumnData):
+        if (len(BeamData) >0 or len(ColumnData)>0) and filename != "":
+            dlist = [BeamData,ColumnData]
+            
+            with open(filename, mode="wb") as f:
+                pickle.dump(dlist, f)
+            #end with
+        #end if
+    #end if
+    
+    #============================================================================
+    #　梁データまたは柱データをpickleファイルから呼び込む関数
+    #============================================================================
+    def Load_MemberData_Picle(self, filename):
+        BeamData = []
+        ColumnData = []
+        if filename != "":
+            dlist = []
+            
+            with open(filename, mode="rb") as f:
+                dlist = pickle.load(f)
+            #end with
+            BeamData = dlist[0]
+            ColumnData = dlist[1]
+        #end if
+        return BeamData,ColumnData
+    #end if
+
+
+
 #end class
+    
+#======================================================================================
+
 
 #======================================================================================
 #
@@ -2487,13 +2560,13 @@ if __name__ == '__main__':
 
     # pdffname.append("ミックスデータ.pdf")
     
-    # pdffname.append("構造図テストデータ.pdf")
-    # pdffname.append("構造計算書テストデータ.pdf")
+    pdffname.append("構造図テストデータ.pdf")
+    pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
     # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
-    pdffname.append("02構造図.pdf")
+    # pdffname.append("02構造図.pdf")
     # pdffname.append("02一貫計算書（一部）.pdf")
 
 
@@ -2514,22 +2587,33 @@ if __name__ == '__main__':
     
     # pdfname = "02一貫計算書（一部）.pdf"
 
+    Folder1 = "PDF"
     Folder2 = "CSV"
+    Folder3 = "PICKLE"
     for pdf in pdffname:
-        BeamData , ColumnData = CR.Read_Elements_from_pdf(Folder1 + "/"+ pdf)
+        BeamData , ColumnData = CR.Read_Members_from_pdf(Folder1 + "/"+ pdf)
         
         if len(BeamData) > 0 or len(ColumnData) > 0:
 
             filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
             filename = Folder2 + "/"+ filename
 
-            CR.Save_Element_Data(filename, BeamData , ColumnData )
+            CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
 
+            filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
+            filename2 = Folder3 + "/"+ filename2
+
+            CR.Save_MemberData_Picle(filename2, BeamData , ColumnData )
+
+            BeamData2 , ColumnData2 = CR.Load_MemberData_Picle(filename2)
+            a=0
         #end if
     #next
     
     time_end = time.time()  # 終了時刻の記録
     print("処理時間 = {} sec".format(time_end - time_sta))
+
     
+
 #end if
     
