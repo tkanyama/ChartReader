@@ -29,9 +29,9 @@ class PatternCheck:
     def makePattern(self):
         self.patternDic = {}
         
-        self.patternDic["断面寸法2"]=[[
-                                    '(\s*\d{1,2}-D\d{2}\s*\+\s*)'
-                                ], 25]
+        # self.patternDic["断面寸法2"]=[[
+        #                             '(\s*\d{1,2}-D\d{2}\s*\+\s*)'
+        #                         ], 25]
         # self.patternDic["断面寸法3"]=[[
         #                             '(\s*\w+\s*)'
         #                         ], 25]
@@ -77,14 +77,30 @@ class PatternCheck:
         self.patternDic["項目名1"]=[[
                                     '符号名'+
                                     '|'+'コンクリート'+
-                                    '|'+'主筋'+'|'+'主 筋'+
+                                    '|'+'\s*主\s*筋\s*'
                                     '|'+'かぶり'+
                                     '|'+'かぶり・あき'+
-                                    '|'+'あばら筋'+
-                                    '|'+'帯筋'+'|'+'帯筋'+
+                                    '|'+'\s*上\s*端\s*筋\s*'+
+                                    '|'+'あばら筋'+'|'+
+                                    '|'+'\s*帯\s*筋\s*'+'|'+
+                                    '|'+'\s*下\s*端\s*筋\s*'+
                                     '|'+'仕口部帯筋'+
+                                    # '|'+'スターラップ'+
+                                    '|'+'\s*腹\s*筋\s*'+
                                     '|'+'芯鉄筋'
                                 ], 10]
+        # self.patternDic["主筋項目名"]=[[スターラップ
+        #                             '\s*上\s*端\s*筋\s*'+
+        #                             '|'+'\s*下\s*端\s*筋\s*'+
+        #                             '|'+'仕口部帯筋'+'|'+'\s*腹\s*筋\s*'+
+        #                             '|'+'芯鉄筋'
+        #                         ], 10]
+        # self.patternDic["材料項目名"]=[[
+        #                             '|'+'\s*主\s*筋\s*'  #+'|'+'主 筋'+
+        #                             '|'+'あばら筋'+'|'+
+        #                             '|'+'\s*帯\s*筋\s*'+
+        #                             '|'+'芯鉄筋'
+        #                         ], 10]
         self.patternDic["構造計算書"]=[[
                                     '構造計算書'
                                 ], 10]
@@ -92,8 +108,8 @@ class PatternCheck:
                                     '断面リスト'
                                 ], 10]
         self.patternDic["項目名2"]=[[
-                                    '(\s*上端(\S*\s*\w+)*\s*)'+    # 上端 上端筋
-                                    '|'+'(\s*下端(\S*\s*\w+)*\s*)'+ # 下端 下端筋
+                                    '(\s*上端\s*)'+    # 上端
+                                    '|'+'(\s*下端\s*)'+ # 下端
                                     '|'+'(\s*X)\s*'+ # X
                                     '|'+'(\s*Y\s*)'+ # Y
                                     '|'+'(\s*材料\s*)' # 主筋
@@ -117,6 +133,9 @@ class PatternCheck:
                                     # (×|x) ：x又は×
                                     # (\s*\(\S+\))* ：(Fc24)がある場合もない場合も含む
                                 ], 25]
+        self.patternDic["断面寸法2"]=[[
+                                    '(\s*\S+\s*(×|x|ｘ)\s*\S+\s*)'       # B × D 
+                                ], 10]
 
         self.patternDic["コンクリート強度"]=[[
                                 '(\s*\(*(Fc|FC|fc)\d+\)*\s*)'+            # Fc30 FC30 fc30 (Fc30) (FC30) (fc30)
@@ -141,7 +160,7 @@ class PatternCheck:
                                 '(\s*\d{1,2}/\d{1,2}-D\d{2}\s*)'+                 # 2/4-D25 10/10-D25
                                 '|'+'(\s*\d{1,2}-D\d{2}\s*)'+                     # 2-D25 10-D25
                                 '|'+'(\s*\d{1,2}/\d{1,2}/\d{1,2}-D\d{2}\s*)'+     # 2/2/4-D25 10/10/10-D25
-                                '|'+'(\s*\d{1,2}-D\d{2}(,|\+)\d{1,2}-D\d{2}\s*)'   # 2-D25,10-D25 2-D25+10-D25
+                                '|'+'(\s*\d{1,2}-D\d{2}\s*(,|\+)\s*\d{1,2}-D\d{2}\s*)'   # 2-D25,10-D25 2-D25+10-D25
                                 ], 16]
         
         self.patternDic["材料"]=[[
@@ -242,6 +261,22 @@ class PatternCheck:
         #end if
         return ""
     #end def
+    
+
+    def isMember(self,key,word):
+        if key in self.PatternKeys:
+            [p1,n] = self.patternDic[key]
+            flag = False
+            for p in p1:
+                if re.fullmatch(p,word) :
+                    return True
+                    break
+                #end if
+            #next
+            return flag
+        else:
+            return None
+        #end if
 
     @property
     def KeyNames(self):
@@ -358,6 +393,7 @@ if __name__ == '__main__':
     data1.append("7-D29")
     data1.append("2-D29,4-D22")
     data1.append("2-D29+4-D22")
+    data1.append("24-D35+ 8-D38")
     # 腹筋
     data1.append("4-D13")
     data1.append(" 4-D10 ")

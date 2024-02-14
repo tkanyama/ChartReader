@@ -29,12 +29,27 @@ Climit = 3
 DbPrint = False
 # DbPrint = True
 
-
+#**************************************************************************************************
+#
+#   構造図および構造計算書の部材表から部材データを読み取るクラス。
+#
+#**************************************************************************************************
 
 class ChartReader:
+
+    #============================================================================
+    #　インスタンスの初期化関数
+    #============================================================================
     def __init__(self):
 
-        self.MemberPosition = {}    # 部材符号と諸元データの辞書
+        # self.a = "abc"
+        # # b = locals()
+        # # c = b["self"]
+        # # keys = c."a"
+        # # d = c.locals()["a"]
+        # print(getattr(self, "a"))
+
+        self.MemberPosition = {}    # 部材符号と諸元データの辞書locals()[Item])getattr(self, var)
         self.BeamData = []
         self.ColumnData = []
         # self.makePattern()
@@ -53,6 +68,9 @@ class ChartReader:
     #end def
 
         
+    #============================================================================
+    #　梁データまたは柱データを階数および記号の順で並び替える関数
+    #============================================================================
     def Sort_Element(self, E_data, ItemName="梁符号", sc=-1):
         # BeamDataを階数の降順で並び替える
         E_data1 = E_data
@@ -126,14 +144,22 @@ class ChartReader:
     
     #end def
 
+    #============================================================================
+    #　PDFのページから単語を抽出する関数
+    #============================================================================
     def Read_Word_From_Page(self, page):
+
+        pCheck = PatternCheck()
         # wordデータを高さy1の順に並び替え
         page_word = []
         Lheight = []
         for obj in page.extract_words():
             text = obj['text']
             x0, y0, x1, y1 = obj['x0'], obj['top'], obj['x1'], obj['bottom']
-            page_word.append({'text': text, 'x0': x0, 'y0': y0, 'x1': x1, 'y1': y1, 'xm': (x0 +x1)/2})
+            page_word.append({
+                'text': text, 'x0': x0, 'y0': y0, 'x1': x1, 'y1': y1,
+                'xm': (x0 +x1)/2 ,'h': (y1 - y0),'w': (x1 - x0),'pitch': (x1 - x0)/len(text)
+                })
             Lheight.append(y1)
         #end if
 
@@ -168,11 +194,66 @@ class ChartReader:
         if len(line_word)>0:
             page_lines.append(line_word)
         #end if
-        a=0
+        
+        # 高さの差が1ポイント以内の行を同じ行にまとめる
+        page_lines2 = []
+        rowi = 0
+        
+        ln = len(page_lines)
+        
+        i = 0
+        AddFlag = []
+        # print()
+        # print(len(page_lines))
+        flag0 = True
+        while i < ln:
+            line0 = page_lines[i]
+
+            y0 = line0[0]["y0"]
+            flag1 = True
+            flag2 = False
+            while flag1:
+                i += 1
+                if i > ln -1 :
+                    flag0 = False
+                    break
+                #end if
+                line1 = page_lines[i]
+                y1 = line1[0]["y0"]
+                if abs(y1 - y0)<1.0 :
+                    line0 += line1
+                    
+                    flag2 = True
+                    if i > ln -1 :
+                        flag0 = False
+                        page_lines2.append(line0)
+                        break
+                    #end if
+                else:
+                    page_lines2.append(line0)
+                    if DbPrint:
+                        t1 = ""
+                        for D in line0:
+                            t1 += D["text"]
+                        print(t1)
+
+                    if flag2:
+                        AddFlag.append(1)
+                    else:
+                        AddFlag.append(0)
+                    #end if
+                    rowi += 1
+                    flag1 = False
+                #end if
+            #end while
+        #end while
+        # print(len(page_lines2))
+        page_lines = page_lines2
+
 
         # 同じ行のwordをx0の順に並べ替える。
         page_lines2 = []
-        for line in page_lines:
+        for rowi, line in enumerate(page_lines):
             line2 = []
             xx = []
             for d1 in line:
@@ -181,23 +262,36 @@ class ChartReader:
             VArray = np.array(xx)      # リストをNumpyの配列に変換
             index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
             for j in range(len(index1)):
+                line[index1[j]]["row"] = rowi   # 並び替えるついでに行位置rowも修正
                 line2.append(line[index1[j]])
             #next
             page_lines2.append(line2)
         #next
         page_lines = page_lines2
 
-
+#============================================================================1
+        
         # 各行の近接するwordをひとつのワードに統合する。
         # 結合条件は 文字ピッチ×spaceN 以内の距離
-        spaceN = 1.5
+        # spaceN = 1.0
         page_lines3 = []
+
+        """
+        デバッグプリントするときはここでブレークポイント
+        """
         for line in page_lines:
+            if DbPrint:
+                name = input("enter to Continue: ")
+                
+            # デバッグプリント============
             if DbPrint:
                 t1 = ""
                 for L1 in line:
-                    t1 += L1["text"]+","
+                    t1 += "["+L1["text"]+"] "
                 print(t1,len(line))
+            #==========================
+
+            c = 1.5    # 単語間の距離が文字ピッチの1.5倍以内であれば結合する。
 
             if len(line)>1 :
                 line2 = []
@@ -206,19 +300,33 @@ class ChartReader:
                 wi = 0
                 while wi < wn - 1:
                     word0 = line[wi]
-                    pitch = (word0["x1"] - word0["x0"]) / len(word0["text"])
+                    pitch = word0["pitch"]
+                    text0 = word0["text"]
+                    x00 = word0["x0"]
+                    x01 = word0["x1"]
+                    y00 = word0["y0"]
+                    
                     word1 = line[wi + 1]
-                    if len(word0["text"]) <= Climit:
-                        c = 2.2
-                    elif "・" in word0["text"] or "・" in word1["text"]:
-                        c = 5.0
-                    else:
-                        c = 1.0
-                    #end if
-                    if word0["y0"] == word1["y0"] and word1["x0"] - word0["x1"] <= pitch * spaceN * c:
-                        word0["text"] =  word0["text"] + " " + word1["text"]
-                        word0["x1"] = word1["x1"]
-                        word0["xm"] = (word0["x0"] + word0["x1"])/2
+                    text1 = word1["text"]
+                    x10 = word1["x0"]
+                    x11 = word1["x1"]
+                    y10 = word1["y0"]
+
+                    text = text0 + " " + text1
+
+                    addflag = False
+
+                    # 単語間の距離が文字ピッチの1.5倍以内であれば結合する。
+                    if abs(y00 - y10)<1.0:
+                        if (x10 - x01) <= pitch * c:
+                            addflag = True
+
+                    # 条件を満たした場合は単語を結合する。
+                    if addflag :
+                        word0["text"] =  text
+                        word0["x1"] = x11
+                        word0["xm"] = (x00 + x11)/2
+                        word0["pitch"] = (x01 + x11) / len(text)
                         line2.append(word0)
                         wi += 1
                     else:
@@ -232,168 +340,90 @@ class ChartReader:
             else:
                 line2=line
             #end if
-            if DbPrint:
+            if DbPrint:     # デバッグプリント
                 t2 = ""
                 for L1 in line2:
-                    t2 += L1["text"]+","
+                    t2 += "["+L1["text"]+"] "
                 print(t2,len(line2))
 
-            #     line2 = []
-            #     word0 = {}
-            #     for word in line:
-            #         if len(word0) == 0:     # 各行の最初の単語の処理
-            #             # words.append(word)
-            #             word0 = word
-            #             # word0["text"] = word["text"]
-            #             # word0["x0"] = word["x0"]
-            #             # word0["x1"] = word["x1"]
-            #             # word0["y0"] = word["y0"]×|x|ｘ
-            #             # word0["y1"] = word["y1"]
-            #             # word0["xm"] = word["xm"]
-            #             pitch = (word0["x1"] - word0["x0"]) / len(word0["text"])
-            #             # print("pirch = {}".format(pitch))
-            #         else:
-            #             if len(word0["text"]) <= Climit:
-            #                 c = 1.5
-            #             # elif "×" in word0["text"] or "x" in word0["text"] or "ｘ" in word0["text"] or "×" in word["text"] or "x" in word["text"] or "ｘ" in word["text"]:
-            #             #     c = 1.2
-            #             elif "・" in word0["text"] or "・" in word["text"]:
-            #                 c = 5.0
-            #             else:
-            #                 c = 1.0
-            #             #end if
-            #             if word0["y0"] == word["y0"] and word["x0"] - word0["x1"] <= pitch * spaceN * c:
-            #                 word0["text"] =  word0["text"] + " " + word["text"]
-            #                 word0["x1"] = word["x1"]
-            #                 word0["xm"] = (word0["x0"] + word0["x1"])/2
-            #             else:
-            #                 line2.append(word0)
-            #                 # print(word0["text"])
-            #                 word0 = word
-            #                 pitch = (word0["x1"] - word0["x0"]) / len(word0["text"])
-            #             #end if
-            #         #end if
-            #     #end if
-            # else:
-            #     line2=line
-            # #end if
-                
-
-
-
-            # print(line)
-            # print(line2)
-            if len(line2)>1:
+            # 2つの単語を結合したものが登録部材名に合致する場合は結合する。
+            if len(line2)>1 :
                 line3 = []
+                # word0 = {}
                 wn = len(line2)
-                # for word in line2:
-                    
                 wi = 0
-                
-                pt1 = "(\s*\d+\s*)|(\s*\d+,\d+\s*)"
-                pt2 = "((\s*(×|x|ｘ)\s*\d+(\s*\(\S+\))*\s*))|(\s*\d+\s*(×|x|ｘ)\s*\d+,\d+(\s*\(\S+\))*\s*)"
-                pt3 = "(\s*\d+\s*(×|x|ｘ)\s*)|(\s*\d+,\d+\s*(×|x|ｘ)\s*)"
-
-                pt4 = "(\s*\w+\s*)"
-                pt5 = "((\s*(×|x|ｘ)\s*\S+\s*))"
-                pt6= "(\s*\S+\s*(×|x|ｘ)\s*)"
-
-                pt7 = "(\s*\d{1,2}-D\d{2}\s*)"
-                pt8 = "(\s*\+\s*\d{1,2}-D\d{2}\s*)"
-                pt9= "(\s*\d{1,2}-D\d{2}\s*\+\s*)"
-                
-                while wi < wn - 1 :
-
-                    word1 = line2[wi]
+                while wi < wn - 1:
+                    word0 = line2[wi]
+                    pitch = word0["pitch"]
+                    text0 = word0["text"]
+                    x00 = word0["x0"]
+                    x01 = word0["x1"]
+                    y00 = word0["y0"]
+                    
+                    word1 = line2[wi + 1]
                     text1 = word1["text"]
-                    # if text1 == "位 置" :
-                    #     a=0
-                    # #end if
                     x10 = word1["x0"]
                     x11 = word1["x1"]
                     y10 = word1["y0"]
 
-                    word2 = line2[wi+1]
-                    text2 = word2["text"]
-                    x20 = word2["x0"]
-                    x21 = word2["x1"]
-                    y20 = word2["y0"]
+                    text = text0 + " " + text1
 
-                    # print (text1,text2)
+                    addflag = False
 
-                    # flag01 = re.match(pt1,text1) != None
-                    # flag02 = re.match(pt2,text1) != None
-                    # flag03 = re.match(pt3,text1) != None
-                    # flag04 = re.match(pt1,text2) != None
-                    # flag05 = re.match(pt2,text2) != None
-                    # flag06 = re.match(pt3,text2) != None
-                    # print(flag01,flag02,flag03,flag04,flag05,flag06)
-
-                    # (500)  (x 1500)
-                    flag1 = (re.match(pt1,text1) != None )and (re.match(pt2,text2) != None)
-                    # (500 x )  (500)
-                    flag2 = (re.match(pt3,text1) != None) and (re.match(pt1,text2) != None)
-
-                    # (B)  (x D)
-                    flag3 = (re.match(pt4,text1) != None )and (re.match(pt5,text2) != None)
-                    # (B x )  (D)
-                    flag4 = (re.match(pt6,text1) != None) and (re.match(pt4,text2) != None)
-
-                    # (2-D25)  (+ 4-D35)
-                    flag5 = (re.match(pt7,text1) != None )and (re.match(pt8,text2) != None)
-                    # (2-D25 + )  (4-D35)
-                    flag6 = (re.match(pt9,text1) != None) and (re.match(pt7,text2) != None)
-
-                    # print(flag1,flag2)
-                    
-                    if (y10 == y20) and (x20 > x11 and (x20 - x11) < pitch * spaceN * 1.0):
-                        if flag1 or flag2 or flag3 or flag4 or flag5 or flag6:
-                            word = word1
-                            word["text"] = text1 + " " + text2
-                            word["x1"] = x21
-                            word["xm"] = (x10 + x21)/2.0
-                            line3.append(word)
-                            if DbPrint:
-                                print(word["text"])
-                            wi += 1
-
-                        else:
-                            line3.append(word1)
+                    if abs(y00 - y10)<1.0:
+                        if pCheck.isMember("断面寸法",text):        # [500 x 1,500]
+                            addflag = True
+                        elif pCheck.isMember("断面寸法2",text) :     # [b x D]
+                            addflag = True
+                        elif pCheck.isMember("梁断面位置",text) :   # [Y1 端]
+                            addflag = True
+                        elif pCheck.isMember("フープ筋",text):      # [-D13@ 100] [-D13 @100]
+                            addflag = True
+                        elif pCheck.isMember("主筋",text) :         # [10-D25 + 10-D15] [10-D25 , 10-D15]
+                            addflag = True
                         #end if
-                    else:
-                        line3.append(word1)
                     #end if
-                        
-                    # line3.append(word1)
+
+                    # 条件を満たした場合は単語を結合する。
+                    if addflag :
+                        word0["text"] =  text
+                        word0["x1"] = x11
+                        word0["xm"] = (x00 + x11)/2
+                        word0["pitch"] = (x00 + x11) / len(text)
+                        line3.append(word0)
+                        wi += 1
+                    else:
+                        line3.append(word0)
+                    #end if
                     wi += 1
                 #end while
                 if wi < wn:
                     line3.append(line2[wi])
                 #end if
-                #end if
-                    
-                #next for word in line2:
-                
             else:
-                line3 = line2
-            # end if
+                line3=line2
+            #end if
+            if DbPrint:
+                t2 = ""
+                for L1 in line3:
+                    t2 += "["+L1["text"]+"] "
+                print(t2,len(line3))
+                print()
+
             if len(line3)>0:
                 page_lines3.append(line3)
             #end if
-            if DbPrint:
-                t3 = ""
-                for L1 in line3:
-                    t3 += L1["text"]+","
-                print(t3,len(line3))
-                print()
-            
-        #next
+        #next   for line in page_lines:
+
         page_lines = page_lines3
 
         return page_lines
     
     #end def
         
+    #============================================================================
+    #　複数ページのPDFファイルから梁データまたは柱データを抽出する関数
+    #============================================================================
     def Read_Elements_from_pdf(self, pdf_path):
 
         # CR = ChartReader()
@@ -405,11 +435,6 @@ class ChartReader:
 
                 if pageN >= 0:
                     print("page = {}".format(pageN+1),end="")
-
-                    # if pageN == 33:
-                    #     a=0
-                    # Page_Width = page.width
-                    # Page_Height = page.height
 
                     page_lines = self.Read_Word_From_Page(page)
 
@@ -436,8 +461,9 @@ class ChartReader:
     # #end def
 
 
-
-
+    #============================================================================
+    #　PDFのページから抽出された単語データから梁データまたは柱データを抽出する関数
+    #============================================================================
     def ElementFinder(self,PageWordData):
         """
         
@@ -513,107 +539,10 @@ class ChartReader:
 
         小梁符号 = wordsByKind["小梁符号"]
         片持梁符号 = wordsByKind["片持梁符号"]
-
-        if len(梁符号)>0:
-            梁断面位置 = wordsByKind["梁断面位置"]
-            if len(梁断面位置) > 0:
-                beamPitch = 0
-                xm1 = 梁断面位置[0]["xm"]
-                row1 = 梁断面位置[0]["row"]
-                for i in range(1,len(梁断面位置)):
-                    xm2 = 梁断面位置[i]["xm"]
-                    row2 = 梁断面位置[i]["row"]
-                    if row2 == row1 :
-                        beamPitch = abs(xm1 - xm2)
-                        break
-                    #end if
-                #next
-            else:
-                beamPitch = 72
-            #end if
-        else:
-            梁断面位置 = []
-        #end if ja_cvu_normalizer.normalize(Line) 
-        if len(梁断面位置):
-            梁断面位置2 = []
-            for data in 梁断面位置:
-                data["text"] = ja_cvu_normalizer.normalize(data["text"]) 
-                梁断面位置2.append(data)
-            #next
-            梁断面位置 = 梁断面位置2
-
-            # 梁断面位置のうちすぐ上に片持梁符号や小梁符号があるものは削除する。
-            梁断面位置2 = []
-            for d in 梁断面位置:
-                # print(d["text"])
-                row = d["row"]
-                xm = d["xm"]
-                flag = True
-                for d1 in 片持梁符号:
-                    row1 = d1["row"]
-                    xm1 = d1["xm"]
-                    if abs(row - row1) <=3 and abs(xm - xm1)<beamPitch:
-                        flag = False
-                    #end if
-                #next
-                for d1 in 小梁符号:
-                    row1 = d1["row"]
-                    xm1 = d1["xm"]
-                    if abs(row - row1) <=3 and abs(xm - xm1)<beamPitch:
-                        flag = False
-                    #end if
-                #next
-                if flag :
-                    梁断面位置2.append(d)
-                #end if
-            #next
-            梁断面位置 = 梁断面位置2
-
-            # 梁断面位置の並び整える
-            梁断面位置2=[]
-            y0 = 梁断面位置[0]["y0"]
-            yy = []
-            yy.append(y0)
-            for i in range(1,len(梁断面位置)):
-                yy0 = 梁断面位置[i]["y0"]
-                for yy1 in yy:
-                    flag = False
-                    if abs(yy0 - yy1) > ypitch:
-                        flag = True
-                    #end if
-                #end if
-                if flag :
-                    yy.append(yy0)
-                #end if
-            #next
-            a=0
-            
-            for yy1 in yy:
-                data = []
-                for d in 梁断面位置:
-                    if abs(d["y0"] - yy1) < 0.5:
-                        data.append(d)
-                    #end if
-                #end if
-                L2 = []
-                for d in data:
-                    L2.append(d["x0"])
-                #next
-                VArray = np.array(L2)      # リストをNumpyの配列に変換
-                index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
-                data2 = []
-                for j in range(len(index1)):
-                    data2.append(data[index1[j]])
-                #next
-                梁断面位置2 += data2
-            #next
-            梁断面位置 = 梁断面位置2
-        #end if
-
-                
-
         項目名1 = wordsByKind["項目名1"]
         項目名2 = wordsByKind["項目名2"]
+        # 主筋項目名 = wordsByKind["主筋項目名"]
+        # 材料項目名 = wordsByKind["材料項目名"]
         断面寸法 = wordsByKind["断面寸法"]
         コンクリート強度 = wordsByKind["コンクリート強度"]
         フープ筋 = wordsByKind["フープ筋"]
@@ -628,7 +557,132 @@ class ChartReader:
         柱符号2 = wordsByKind["柱符号2"]
         構造計算書 = wordsByKind["構造計算書"]
         断面リスト = wordsByKind["断面リスト"]
+
+        itemXmin = 10000
+        itemYmin = 10000
+        if len(梁符号)>0:
+            for d in 梁符号:
+                x0 = d["x0"]
+                y0 = d["y0"]
+                if x0 < itemXmin:
+                    itemXmin = x0
+                #end if
+                if y0 < itemYmin:
+                    itemYmin = y0
+                #end if
+            #next
+
+            梁断面位置 = wordsByKind["梁断面位置"]
+            if len(梁断面位置) > 1:
+                # 梁断面位置のうち梁符号より上にあるものは削除する。
+                梁断面位置2 = []
+                for d in 梁断面位置:
+                    y1 = d["y1"]
+                    if y1 > itemYmin:
+                        梁断面位置2.append(d)
+                    #end if
+                #next
+                梁断面位置 = 梁断面位置2
+                
+                
+                beamPitch = 0
+                xm1 = 梁断面位置[0]["xm"]
+                x0 = 梁断面位置[0]["x0"]
+                if x0 < itemXmin:
+                    itemXmin = x0
+                #end if
+                row1 = 梁断面位置[0]["row"]
+                for i in range(1,len(梁断面位置)):
+                    xm2 = 梁断面位置[i]["xm"]
+                    row2 = 梁断面位置[i]["row"]
+                    
+                    if row2 == row1 :
+                        beamPitch = abs(xm1 - xm2)
+                        break
+                    #end if
+                #next
+            
+            else:
+                # 表データが1列の場合は表の横ピッチは72とする。
+                beamPitch = 72
+            #end if
+        else:
+            梁断面位置 = []
+        #end if ja_cvu_normalizer.normalize(Line) 
+            
+
+        if len(梁断面位置):
+            梁断面位置2 = []
+            for data in 梁断面位置:
+                data["text"] = ja_cvu_normalizer.normalize(data["text"]) 
+                梁断面位置2.append(data)
+            #next
+            梁断面位置 = 梁断面位置2
+
+            # 梁断面位置の下側に主筋もフープ筋ないものは削除する。
+            梁断面位置2 = []
+            for d in 梁断面位置:
+                # print(d["text"])
+                row = d["row"]
+                xm = d["xm"]
+                flag = False
+                if len(主筋)>0:
+                    for d1 in 主筋:
+                        row1 = d1["row"]
+                        xm1 = d1["xm"]
+                        if row < row1 and abs(xm - xm1)<beamPitch * 2:
+                            flag = True
+                            break
+                        #end if
+                    #next
+                #end if
+                
+                if flag == False:
+                    if len(フープ筋)>0:
+                        for d1 in フープ筋:
+                            row1 = d1["row"]
+                            xm1 = d1["xm"]
+                            if row < row1 and abs(xm - xm1)<beamPitch * 2:
+                                flag = True
+                                break
+                            #end if
+                        #next
+                    #end if
+                #end if
+                if flag :
+                    梁断面位置2.append(d)
+                #end if
+            #next
+            梁断面位置 = 梁断面位置2
+
+        # 梁データが無い場合は柱符号で項目名の境界[itemXmin]を決定する。
+        if len(柱符号)>0 and itemXmin == 10000:
+            for d in 柱符号:
+                x0 = d["x0"]
+                if x0 < itemXmin:
+                    itemXmin = x0
+                #end if
+            #next
+        #end if
         
+        if itemXmin == 10000:
+            itemXmin = 72*2
+        #end if
+        
+        登録外項目 = []
+        itemKey = []
+        for i, LineWord in enumerate(PageWordData):
+            word = LineWord[0]
+            text = word["text"]
+            x1 = word["x1"]
+            if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and x1<itemXmin:
+                # if not(text in itemKey):
+                登録外項目.append(word)
+                # itemKey.append(text)
+            #end if
+        #next
+
+        # PDFが構造計算書の場合で「断面リスト」のヘッダーがない場合はそのページの処理を中止する。
         if len(構造計算書)>0:
             if len(断面リスト)==0 :
                 BeamData = []
@@ -637,14 +691,16 @@ class ChartReader:
             #end if
         #end if
 
+        # 主筋データが無い場合、又は、梁符号も柱符号も両方がない場合はそのページの処理を中止する。
         if len(主筋) == 0 or (len(梁符号) == 0 and len(柱符号) == 0):
             BeamData = []
             ColumnData = []
             return BeamData,ColumnData
         #end if
-        # 各部材の項目名Itemに名称を追加
+
+        # 各部材の項目名Itemに""を追加
         ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり",
-                    "柱符号","柱符号2","腹筋","フープ筋","材料"]
+                    "柱符号","柱符号2","腹筋","フープ筋","材料","片持梁符号"]
         for Item in ItemName:
             if len(locals()[Item])>0:
                 for j in range(len(locals()[Item])):
@@ -652,9 +708,9 @@ class ChartReader:
                 #next
             #end if
         #next
-
+        
         # フープ筋と材料については表の左側の項目名を追加（あば筋、帯筋等）
-        ItemName = ["主筋","フープ筋","材料"]
+        ItemName = ["フープ筋","材料"]
         for Item in ItemName:
             if len(locals()[Item])>0:
                 # flag = [0]*len(locals()[Item])
@@ -675,26 +731,44 @@ class ChartReader:
                         top1 = d["y0"]
                         bottom1 = d["y1"]
                         if right1<left0 and top1-ypitch*2.0 < top0 and bottom1+ypitch*2.0 > bottom0:
-                            if "筋" in d["text"] or "フープ" in d["text"] or "HOOP" in d["text"]:
+                            flag = False
+                            if "筋" in d["text"]:
+                                flag = True
+                            elif "フープ" in d["text"]:
+                                flag = True
+                            elif "HOOP" in d["text"]:
+                                flag = True
+                            # elif "スターラップ" in d["text"]:
+                            #     flag = True
+                            #end if
+                            
+                            if flag:
                                 d2.append(d)
                             #end if
                         #end if
                     #next
+                    if len(登録外項目)>0:
+                        for d in 登録外項目:
+                            row1 = d["row"]
+                            left1 = d["x0"]
+                            right1 = d["x1"]
+                            top1 = d["y0"]
+                            bottom1 = d["y1"]
+                            if right1<left0 and top1-ypitch*1.0 < top0 and bottom1+ypitch*1.0 > bottom0:
+                            
+                                d2.append(d)
+                                #end if
+                            #end if
+                        #next
+                    #end if
+
                             
                     # 項目名の決定
                     if len(d2) == 1:
                         # 近くにある項目名がひとつの場合はそれを選択する
-                        if Item == "主筋" :
-                            if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
-                            # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
-                                locals()[Item][j]["item"] = d2[0]["text"]
-                            else:
-                                locals()[Item][j]["item"] = ""
-                            #end if
-                        else:
-                            locals()[Item][j]["item"] = d2[0]["text"]
-                        #end if
-                        # flag[j] = 1
+                        
+                        locals()[Item][j]["item"] = d2[0]["text"]
+                        
                     elif len(d2) > 1:
                         # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
                         h1 = 10000
@@ -707,24 +781,76 @@ class ChartReader:
                             #end if
                         #next
                         if im > -1 :
-                            if Item == "主筋":
-                                if not("主" in d2[im]["text"] and "筋" in d2[im]["text"]) :
-                                # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[im]["text"]) == None :
-                                    locals()[Item][j]["item"] = d2[im]["text"]
-                                else:
-                                    locals()[Item][j]["item"] = ""
-                                #end if
-                            else:
-                                locals()[Item][j]["item"] = d2[im]["text"]
-                            #end if
-                            # locals()[Item][j]["item"] = d2[im]["text"]
-                            # flag[j] = 1
+                            
+                            locals()[Item][j]["item"] = d2[im]["text"]
+                            
                         #end if
                     #end if
                 #next for j in range(len(locals()[Item])):
             #end if
         #next for Item in ItemName:
         a=0
+
+        ItemName = ["主筋"]
+        for Item in ItemName:
+            if len(locals()[Item])>0:
+                # flag = [0]*len(locals()[Item])
+                for j in range(len(locals()[Item])):
+                    # if flag[j] == 0:
+                    dataDic1 = locals()[Item][j]
+                    row = dataDic1["row"]
+                    xm = dataDic1["xm"]
+                    left0 = dataDic1["x0"]
+                    right0 = dataDic1["x1"]
+                    top0 = dataDic1["y0"]
+                    bottom0 = dataDic1["y1"]
+                    d2 = []
+                    for d in 項目名1:
+                        row1 = d["row"]
+                        left1 = d["x0"]
+                        right1 = d["x1"]
+                        top1 = d["y0"]
+                        bottom1 = d["y1"]
+                        if right1<left0 and top1-ypitch*2.0 < top0 and bottom1+ypitch*2.0 > bottom0:
+                            if "筋" in d["text"] :
+                                d2.append(d)
+                            #end if
+                        #end if
+                    #next
+                            
+                    # 項目名の決定
+                    if len(d2) == 1:
+                        if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
+                        # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
+                            locals()[Item][j]["item"] = d2[0]["text"]
+                        else:
+                            locals()[Item][j]["item"] = ""
+                        #end if
+                    elif len(d2) > 1:
+                        # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
+                        h1 = 10000
+                        im = -1
+                        for k, d1 in enumerate(d2):
+                            top1 = d1["y0"]
+                            if abs(top0 - top1)< h1:
+                                h1 = abs(top0 - top1)
+                                im = k
+                            #end if
+                        #next
+                        if im > -1 :
+                            if not("主" in d2[im]["text"] and "筋" in d2[im]["text"]) :
+                            # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[im]["text"]) == None :
+                                locals()[Item][j]["item"] = d2[im]["text"]
+                            else:
+                                locals()[Item][j]["item"] = ""
+                            #end if
+                            
+                        #end if
+                    #end if
+                #next for j in range(len(locals()[Item])):
+            #end if
+        #next for Item in ItemName:
+        
 
         # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
         floorXmin1= 10000.0
@@ -1182,34 +1308,6 @@ class ChartReader:
                 #end if
             #next
 
-            # 梁断面位置の記号があってもその上に梁符号がないものは削除する。
-            Section01 = []
-            Section02 = []
-            
-            for i, Sec in enumerate(Section):
-                if len(Sec)==0:
-                    row0 = Sec[0]["row"]
-                    xmin = Sec[0]["xm"]-xpitch/2
-                    xmax = Sec[0]["xm"]+xpitch/2
-                else:
-                    row0 = Sec[0]["row"]
-                    xmin = Sec[0]["x0"]-20
-                    xmax = Sec[len(Sec)-1]["x1"]+20
-                #end if
-                for d in 梁符号:
-                    row1 = d["row"]
-                    xm1 = d["xm"]
-                    if row1 < row0 and xm1 >= xmin and xm1 <= xmax:
-                        Section01.append(Sec)
-                        Section02.append(Section2[i])
-                        break
-                    #end if
-                #next
-            #next
-            Section = Section01
-            Section2 = Section02
-
-
             for i in range(len(Section)):
                 bn = len(Section[i])
                 if bn == 1:
@@ -1217,61 +1315,77 @@ class ChartReader:
                     row0 = Section[i][0]["row"]
                     xmin = Section[i][0]["xm"]-xpitch/2
                     xmax = Section[i][0]["xm"]+xpitch/2
+                    y00 = Section[i][0]["y0"]
                 else:
                     xm0 = (Section[i][0]["xm"] + Section[i][bn - 1]["xm"])/2
                     row0 = Section[i][0]["row"]
-                    xmin = Section[i][0]["x0"]-20
-                    xmax = Section[i][bn-1]["x1"]+20
+                    xmin = Section[i][0]["x0"]  #-20
+                    xmax = Section[i][bn-1]["x1"]   #+20
+                    y00 = Section[i][0]["y0"]
                 #end if
                 
                 for j in range(len(Section[i])):
                     Section[i][j]["xm0"] = xm0
                 #nextj , d2 in enumerate(梁符号1)
-                    
-                # xmin = Section[i][0]["x0"]
-                # xmax = Section[i][bn-1]["x1"]
-
+                
                 row1 = Section[i][0]["row"]
                 rmax = Section[i][0]["rmax"]
                 
                 data = []
+
                 flag1 = True
+                dd = []
                 for k,d1 in enumerate(梁符号):   # ローカル変数を名前で指定する関数
                     xm = d1["xm"]
                     row = d1["row"]
-                    if abs(row1 - row) < 4 and xm >= xmin and xm <= xmax:
-                        dic = {}
-                        dic["kind"] = d1["kind"]
-                        dic["text"] = d1["text"]
-                        dic["number"] = k
-                        dic["row"] = d1["row"]
-                        dic["xm"] = d1["xm"]
-                        dic["y0"] = d1["y0"]
-                        dic["item"] = d1["item"]
-                        data.append(dic)
-                        flag1 = False   # 梁符号1が見つかった場合はFlag1をFalseにする。
+                    if row1 > row  and xm >= xmin and xm <= xmax:
+                        dd.append(d1)
+                    #end if
+                #next
+                for k,d1 in enumerate(片持梁符号):   # ローカル変数を名前で指定する関数
+                    xm = d1["xm"]
+                    row = d1["row"]
+                    if row1 > row  and xm >= xmin and xm <= xmax:
+                        dd.append(d1)
                     #end if
                 #next
                 
-                if flag1 :      # 梁断面位置のすぐ上に梁符号がない場合は一番上にある梁符号を割り当てる。
-                    for k,d1 in enumerate(梁符号):   # ローカル変数を名前で指定する関数
-                        xm = d1["xm"]
-                        row = d1["row"]
-                        if row1 > row and xm >= xmin and xm <= xmax:
-                            # data.append(d1)
-                            dic = {}
-                            dic["kind"] = d1["kind"]
-                            dic["text"] = d1["text"]
-                            dic["number"] = k
-                            dic["row"] = d1["row"]
-                            dic["xm"] = d1["xm"]
-                            dic["y0"] = d1["y0"]
-                            dic["item"] = d1["item"]
-                            data.append(dic)
-                            # Section2[i][j].append(dic)
-                            flag1 = False
-                        #end if
-                    #next
+                if len(dd) > 0:
+                    if len(dd) == 1:
+                        dic = {}
+                        dic["kind"] = dd[0]["kind"]
+                        dic["text"] = dd[0]["text"]
+                        dic["number"] = k
+                        dic["row"] = dd[0]["row"]
+                        dic["xm"] = dd[0]["xm"]
+                        dic["y0"] = dd[0]["y0"]
+                        dic["item"] = dd[0]["item"]
+                        data.append(dic)
+                        flag1 = False   # 梁符号1が見つかった場合はFlag1をFalseにする。
+                    
+                    else:
+                        LL = 2000*2000
+                        kk = 0
+                        for k, d2 in enumerate(dd):
+                            xm = d2["xm"]
+                            y10 = d2["y0"]
+                            L1 = (xm - xm0)**2 + (y10 - y00)**2
+                            if L1 < LL:
+                                kk = k
+                                LL = L1
+                            #end if
+                        #next
+                        dic = {}
+                        dic["kind"] = dd[kk]["kind"]
+                        dic["text"] = dd[kk]["text"]
+                        dic["number"] = k
+                        dic["row"] = dd[kk]["row"]
+                        dic["xm"] = dd[kk]["xm"]
+                        dic["y0"] = dd[kk]["y0"]
+                        dic["item"] = dd[kk]["item"]
+                        data.append(dic)
+                        flag1 = False   # 梁符号1が見つかった場合はFlag1をFalseにする。
+                    #end if
                 #end if
                 
                 if len(data) >0 :
@@ -1287,8 +1401,10 @@ class ChartReader:
                 #enf if
                 
                 
+                #======================================================================
+                #   梁断面位置に各部材を追加する
+                #
                 ItemName = ["梁符号2","断面寸法","主筋","フープ筋","かぶり","材料","腹筋"]
-                # ItemName = ["主筋","フープ筋","かぶり","材料","コンクリート強度","腹筋"]
                 
                 for Item in ItemName:
                     data = []
@@ -1311,6 +1427,7 @@ class ChartReader:
                     #next
                     
                     if len(data)>0:
+                        # 該当するデータが一つしかない場合は、端部と中央で同じデータを追加する。
                         if len(data) == 1:
                             dic = {}
                             dic["kind"] = data[0]["kind"]
@@ -1324,6 +1441,8 @@ class ChartReader:
                             for j in range(len(Section2[i])):
                                 Section2[i][j].append(data[0])
                             #next
+                                
+                        # 該当するデータ複数ある場合は、端部と中央でそれぞれのデータを追加する。
                         else:
                             r1 = data[0]["row"]
                             data2 = []
@@ -1358,6 +1477,9 @@ class ChartReader:
                     
                 #next :(for Item in ItemName:)
                 
+                #======================================================================
+                #   階に各部材を追加する
+                #
                 if len(階)>0:
                     ItemName2 = ["階"]
                     
@@ -1375,9 +1497,12 @@ class ChartReader:
                                     dic = {}
                                     dic["kind"] = d1["kind"]
                                     floor = d1["text"]
+
+                                    # 階はＲ以外は数値のみを追加する。　階の字やFLは削除
                                     if floor[0] == "R":
                                         floor = "R"
                                     else:
+                                        #  階が一カ所に複数記載されている場合はカンマ区切りで追加する
                                         if "," in floor:
                                             floor2 = floor.split(",")
                                             floor = ""
@@ -1389,8 +1514,7 @@ class ChartReader:
                                             floor = re.sub(r"\D", "", floor)
                                         #end if
                                     #end if
-                                    # dic["text"] = d1["text"]
-                                    dic["text"] = floor
+                                    dic["text"] = floor # 階はＲ以外は数値のみを追加する。　階の字やFLは削除
                                     dic["number"] = k
                                     dic["row"] = d1["row"]
                                     dic["xm"] = d1["xm"]
@@ -1399,14 +1523,36 @@ class ChartReader:
                                     Section2[i][j].append(dic)
                                 #end if
                             #next
-                            # Section[i][j][Item] = data
+                            
                         #next
                     #next
                 
                 #end if
 
             #next :(for i in range(len(Section)):)
-        
+
+
+            # データに梁符号が含まれているものだけを抽出する。        
+            Section22 = []
+            bn = len(Section2)
+            for i in range(bn):
+                data = Section2[i][0]
+                flag = False
+                for d in data:
+                    if d["kind"]=="梁符号":
+                        flag = True
+                        break
+                    #end if
+                #next
+                if flag :
+                    Section22.append( Section2[i])
+                #end if
+            #next
+            Section2 = Section22
+
+            """
+            ここでブレークポイント
+            """
             # Section2を行の順番に並び替える
             Section22 = []
             for Sec in Section2:
@@ -1415,8 +1561,8 @@ class ChartReader:
                 for dic in Sec2:
                     L2.append(dic["row"])
                 #next
-                VArray = np.array(L2)      # リストをNumpyの配列に変換
-                index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
+                VArray = np.array(L2)      
+                index1 = np.argsort(VArray) 
                 Sec1 = []
                 for d1 in Sec:
                     L22 = []
@@ -1428,7 +1574,7 @@ class ChartReader:
                 Section22.append(Sec1)
             #next
             Section2 = Section22
-        
+    
             # 部材表は複数の部材が縦に並んでいるので部材毎に分割する処理
             for Sec in Section2:
                 for bdata in Sec:
@@ -1504,30 +1650,15 @@ class ChartReader:
                         #end if
                     #next
                         
-                            
-                    # 主筋の数を1列にあるデータ数とする。
-                    kindSameNMax = len(kindSameN2["主筋"])
+                    for k in kind:
+                        if "主筋" in k:
+                            mainKey = k
+                            break
+                        #end if
+                    #next
 
-                    # 材料は主筋とフープ筋の2カ所に記載される場合があり、そのときは材料1と材料2に分ける。
-                    # if len(材料)>0:
-                    #     if len(kindSameN2["材料"]) == kindSameNMax*2:
-                    #         d0 = kindSameN2["材料"]
-                    #         d1 = []
-                    #         d2 = []
-                    #         for j, d in enumerate(d0):
-                    #             if j % 2 == 0:
-                    #                 d1.append(d)
-                    #             else:
-                    #                 d2.append(d)
-                    #             #end if
-                    #         #next
-                    #         kindSameN2["材料1"] = d1
-                    #         kindSameN2["材料2"] = d2
-                    #     else:
-                    #         kindSameN2["材料1"] = kindSameN2["材料"]
-                    #     #end if
-                    #     removed_value = kindSameN2.pop('材料')
-                    # #end if :(if len(材料)>0:)
+                    # 主筋の数を1列にあるデータ数とする。
+                    kindSameNMax = len(kindSameN2[mainKey])
 
                     # キーの順番が乱れているので再度行の順番に並び替える。
                     keys = list(kindSameN2.keys())
@@ -1627,7 +1758,6 @@ class ChartReader:
             
         #end if : (if dn > 0 and len(梁符号) > 0:)
         
-
         #=====================================================================
         # 梁データを辞書形式に変換する処理
         #=====================================================================
@@ -1700,9 +1830,17 @@ class ChartReader:
         BeamData = BeamData2
 
 
+        """
+        ここからは柱の処理
+
+        """
+
         #===================================
         # 柱部材の抽出
         #===================================
+
+        # 柱には梁のような複数の断面はないので柱符号の数の断面データを作成する。
+
         Section = []
         Section2 = []
         ColumnData = []
@@ -1760,6 +1898,8 @@ class ChartReader:
                     #end if
                 #next
                 
+                # 表の終端を決める処理
+                    
                 # 梁断面位置の代わりに梁断面位置または小梁符号または片持梁符号があった場合も別の梁部材表であると判断し、データの終端行位置をその行−1とする。
                 ItemName = ["柱符号","梁符号","梁断面位置","小梁符号","片持梁符号","壁"]
                 for Item in ItemName:
@@ -1786,7 +1926,6 @@ class ChartReader:
                 #end if
             #next        
 
-            ElementData = []
             for i in range(len(Section)):
                 bn = len(Section[i])
                 if bn == 1:
@@ -1927,6 +2066,7 @@ class ChartReader:
                     #next
                 
                 #end if
+            #next
 
             Section22 = []
             for Sec in Section2:
@@ -1948,6 +2088,78 @@ class ChartReader:
                 Section22.append(Sec1)
             #next
             Section2 = Section22
+            
+
+            #==========================================================
+            # 表に空欄がある場合にそこに「no data」を追加する処理（柱のみの処理）
+            #==========================================================
+
+            # 表が縦に複数ある場合は分ける。
+            Section3 = []
+            Section22 = []
+            row0 = Section2[0][0][0]["row"]
+            for j, Sec in enumerate(Section2):
+                row1 = Sec[0][0]["row"]
+                if row0 == row1 :
+                    Section22.append(Sec)
+                else:
+                    Section3.append(Section22)
+                    Section22 = []
+                    Section22.append(Sec)
+                    row0 = Sec[0][0]["row"]
+                #end if
+            #next
+            Section3.append(Section22)
+
+            # 表毎に空欄がある場合はno dataを追加する        
+            Section33 = []
+            for Section2 in Section3:
+                SecKeys = []
+                KeyN = []
+                KeyNmax = 0
+                KeyPos = -1
+                for i, Sec in enumerate(Section2):
+                    SecKey = []
+                    for D in Sec[0]:
+                        SecKey.append(D["kind"])
+                    #next
+                    SecKeys.append(SecKey)
+                    n = len(SecKey)
+                    KeyN.append(len(SecKey))
+                    if n > KeyNmax:
+                        KeyNmax = n
+                        KeyPos = i
+                    #end if
+                #next
+                StandardKeys = SecKeys[KeyPos]
+                StandardData = Section2[KeyPos][0]
+                Section22 = []
+                for i, Sec in enumerate(Section2):
+                    Sec2 = []
+                    Sn = len(Sec)
+                    for j in range(Sn):
+                        k = 0
+                        data = []
+                        for m, key0 in enumerate(StandardKeys):
+                            key1 = Sec[j][k]["kind"]
+                            xm = Sec[j][k]["xm"]
+                            if key0 == key1 :
+                                data.append(Sec[j][k])
+                                k += 1
+                            else:
+                                D = StandardData[m]
+                                D["xm"] = xm
+                                D["text"] = "no data"
+                                data.append(D)
+                            #end if
+                        #next
+                        Sec2.append(data) 
+                    #next
+                    Section22.append(Sec2)
+                #next
+                Section33 += Section22
+            #next
+            Section2 = Section33
 
             # 部材表は複数の部材が縦に並んでいるので部材毎に分割する処理
             for Sec in Section2:
@@ -2029,29 +2241,7 @@ class ChartReader:
                     
                     # 主筋の数を1列にあるデータ数とする。
                     kindSameNMax = len(kindSameN2["主筋"])
-                    # kindSameNMax = len(kindSameN2["断面寸法"])
-
-
-                    # # 材料は主筋とフープ筋の2カ所に記載される場合があり、そのときは材料1と材料2に分ける。
-                    # if len(材料)>0:
-                    #     if len(kindSameN2["材料"]) == kindSameNMax*2:
-                    #         d0 = kindSameN2["材料"]
-                    #         d1 = []
-                    #         d2 = []
-                    #         for j, d in enumerate(d0):
-                    #             if j % 2 == 0:
-                    #                 d1.append(d)
-                    #             else:
-                    #                 d2.append(d)
-                    #             #end if
-                    #         #next
-                    #         kindSameN2["材料1"] = d1
-                    #         kindSameN2["材料2"] = d2
-                    #     else:
-                    #         kindSameN2["材料1"] = kindSameN2["材料"]
-                    #     #end if
-                    #     removed_value = kindSameN2.pop('材料')
-                    # #end if :(if len(材料)>0:)
+                    
 
                     # キーの順番が乱れているので再度行の順番に並び替える。
                     keys = list(kindSameN2.keys())
@@ -2059,15 +2249,15 @@ class ChartReader:
                     for key in keys:
                         L2.append(kindSameN2[key][0][0])
                     #next
-                    VArray = np.array(L2)      # リストをNumpyの配列に変換
-                    index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
+                    VArray = np.array(L2) 
+                    index1 = np.argsort(VArray)
                     keys1 = []
                     for j in range(len(index1)):
                         keys1.append(keys[index1[j]])
                     #next
                     keys = keys1
                     
-                    # 同じ梁のデータを梁断面位置の順番でひとつにまとめる。
+                    # 同じ柱のデータを柱符号の順番でひとつにまとめる。
                     beam2 = []            
                     for bdata in Sec:
                         beam = []
@@ -2112,36 +2302,6 @@ class ChartReader:
                                 #next
                                 #end if
                             next
-                        
-
-
-
-
-                            # dataDic1 = []
-                            # for key in keys:
-                            #     nn = kindSameN2[key]
-                            #     if len(nn[j]) == 1:
-                            #         data = bdata[nn[0][0]]
-                            #         key2 = key
-                            #         dataDic1.append([key,data["text"]])
-                            #     else:
-                            #         n2 = 0
-                            #         for n in nn[j]:
-                            #             n2 += 1
-                            #             data = bdata[n]
-                            #             if len(nn[j])>1 :
-                            #                 if not("階" in key) and not("柱符号" in key):
-                            #                     key2 = key + "-" + str(n2)
-                            #                 else:
-                            #                     key2 = key
-                            #                 #end if
-                            #             else:
-                            #                 key2 = key
-                            #             #end if
-                            #             dataDic1.append([key2,data["text"]])
-                            #         #next
-                            #     #end if
-                            # #next
                         
                             # 表に階のデータが無い場合は梁符号から作成し、追加する。
                             # FG1 -> 1FL  4G1 -> 4FL
@@ -2236,6 +2396,9 @@ class ChartReader:
     
     #end def
 
+    #============================================================================
+    #　梁データまたは柱データをCSVファイルに書き出す関数
+    #============================================================================
     def Save_Element_Data(self, filename, BeamData, ColumnData):
 
         ja_cvu_normalizer = JaCvuNormalizer()
@@ -2322,15 +2485,16 @@ if __name__ == '__main__':
 
     pdffname =[]
 
+    # pdffname.append("ミックスデータ.pdf")
+    
     # pdffname.append("構造図テストデータ.pdf")
     # pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
     # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
-    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力のコピー.pdf")
     
     pdffname.append("02構造図.pdf")
-    pdffname.append("02一貫計算書（一部）.pdf")
+    # pdffname.append("02一貫計算書（一部）.pdf")
 
 
     # pdfname = "構造図テストデータ.pdf"
