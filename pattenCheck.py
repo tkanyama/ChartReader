@@ -85,6 +85,7 @@ class PatternCheck:
                                     '|'+'\s*帯\s*筋\s*'+'|'+
                                     '|'+'\s*下\s*端\s*筋\s*'+
                                     '|'+'仕口部帯筋'+
+                                    '|'+'フープ'+
                                     # '|'+'スターラップ'+
                                     '|'+'\s*腹\s*筋\s*'+
                                     '|'+'芯鉄筋'
@@ -104,6 +105,12 @@ class PatternCheck:
         self.patternDic["構造計算書"]=[[
                                     '構造計算書'
                                 ], 10]
+        self.patternDic["同上"]=[[
+                                    '\s*同\s*上\s*'
+                                ], 6]
+        self.patternDic["階上項目"]=[[
+                                    '\s*階\s*|\s*符\s*号\s*'
+                                ], 6]
         self.patternDic["断面リスト"]=[[
                                     '断面リスト'
                                 ], 10]
@@ -111,8 +118,8 @@ class PatternCheck:
                                     '(\s*上端\s*)'+    # 上端
                                     '|'+'(\s*下端\s*)'+ # 下端
                                     '|'+'(\s*X)\s*'+ # X
-                                    '|'+'(\s*Y\s*)'+ # Y
-                                    '|'+'(\s*材料\s*)' # 主筋
+                                    '|'+'(\s*Y\s*)' # Y
+                                    # '|'+'(\s*材料\s*)' # 主筋
                                 ] ,5]
         self.patternDic["柱符号"]=[[
                                     '(\s*C\d{1,2}\s*)'       # C1 C10
@@ -474,6 +481,7 @@ if __name__ == '__main__':
     data1.append("10")
     data1.append("1")
     data1.append("05")
+    data1.append("CFL")
     # 日付
     data1.append("2024/01/31")
     data1.append("2024/1/1")

@@ -9,6 +9,7 @@ import pdfplumber
 from io import StringIO
 import time
 import pickle
+from pypdf import PdfReader as PR2 # 名前が上とかぶるので別名を使用
 
 # pip install numpy matplotlib scipy
 import numpy as np
@@ -16,6 +17,7 @@ import matplotlib.pyplot as plt
 from scipy import signal
 import re
 import sys,csv,os
+import logging
 
 # pip install reportlab ja_cvu_normalizer
 from reportlab.pdfbase import pdfmetrics
@@ -73,48 +75,77 @@ class ChartReader:
     #　梁データまたは柱データを階数および記号の順で並び替える関数
     #============================================================================
     def Sort_Element(self, E_data, ItemName="梁符号", sc=-1):
-        # BeamDataを階数の降順で並び替える
-        E_data1 = E_data
-        E_data2 = []
-        L2 = []
-        for i in range(len(E_data)):
-            floor = E_data1[i][0]["階"]
-            if floor == "R":
-                L2.append(1000)
-            else:
-                if "," in floor:
-                    floor2 = floor.split(",")
-                    L2.append(int(floor2[0]))
-                else:
-                    L2.append(int(floor))
-                #end if
-            #end if
-            # L2.append(BeamData[i][0][0])
-        #next
-        VArray = np.array(L2)      # リストをNumpyの配列に変換
-        index1 = np.argsort(sc * VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
-        L22 = []
-        for j in range(len(index1)):
-            E_data2.append(E_data1[index1[j]])
-        #next
-        E_data1 = E_data2
 
-        # BeamDataを階毎に梁符号の昇順で並び替える
-        E_data2 = []
-        L2 = []
-        foor = E_data1[0][0]["階"]
-        bn = E_data1[0][0][ItemName]
-        bn = re.sub(r"\D", "", bn)
-        L2.append(int(bn))
-        Beams = []
-        Beams.append(E_data1[0])
-        for i in range(1,len(E_data1)):
-            if foor == E_data1[i][0]["階"]:
-                Beams.append(E_data1[i])
-                bn = E_data1[i][0][ItemName]
-                bn = re.sub(r"\D", "", bn)
-                L2.append(int(bn))
-            else:
+        if len(E_data)>1:
+            # BeamDataを階数の降順で並び替える
+            E_data1 = E_data
+            E_data2 = []
+            L2 = []
+            for i in range(len(E_data)):
+                floor = E_data1[i][0]["階"]
+                if floor == "R":
+                    L2.append(1000)
+                else:
+                    if "," in floor:
+                        floor2 = floor.split(",")
+                        if floor2[0].isnumeric():
+                            L2.append(int(floor2[0]))
+                        else:
+                            L2.append(0)
+                        #end if
+                        
+                    else:
+                        if floor.isnumeric():
+                            L2.append(int(floor))
+                        else:
+                            L2.append(0)
+                        #end if
+                    #end if
+                #end if
+                # L2.append(BeamData[i][0][0])
+            #next
+            VArray = np.array(L2)      # リストをNumpyの配列に変換
+            index1 = np.argsort(sc * VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
+            L22 = []
+            for j in range(len(index1)):
+                E_data2.append(E_data1[index1[j]])
+            #next
+            E_data1 = E_data2
+
+            # BeamDataを階毎に梁符号の昇順で並び替える
+            E_data2 = []
+            L2 = []
+            foor = E_data1[0][0]["階"]
+            bn = E_data1[0][0][ItemName]
+            bn = re.sub(r"\D", "", bn)
+            L2.append(int(bn))
+            Beams = []
+            Beams.append(E_data1[0])
+            for i in range(1,len(E_data1)):
+                if foor == E_data1[i][0]["階"]:
+                    Beams.append(E_data1[i])
+                    bn = E_data1[i][0][ItemName]
+                    bn = re.sub(r"\D", "", bn)
+                    L2.append(int(bn))
+                else:
+                    VArray = np.array(L2)      # リストをNumpyの配列に変換
+                    index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
+                    Beam2 = []
+                    for j in range(len(index1)):
+                        Beam2.append(Beams[index1[j]])
+                    #next
+                    E_data2 += Beam2
+
+                    L2 = []
+                    foor = E_data1[i][0]["階"]
+                    bn = E_data1[i][0][ItemName]
+                    bn = re.sub(r"\D", "", bn)
+                    L2.append(int(bn))
+                    Beams = []
+                    Beams.append(E_data1[i])
+                #end if
+            #next
+            if len(Beams)>0:
                 VArray = np.array(L2)      # リストをNumpyの配列に変換
                 index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
                 Beam2 = []
@@ -122,26 +153,11 @@ class ChartReader:
                     Beam2.append(Beams[index1[j]])
                 #next
                 E_data2 += Beam2
-
-                L2 = []
-                foor = E_data1[i][0]["階"]
-                bn = E_data1[i][0][ItemName]
-                bn = re.sub(r"\D", "", bn)
-                L2.append(int(bn))
-                Beams = []
-                Beams.append(E_data1[i])
             #end if
-        #next
-        if len(Beams)>0:
-            VArray = np.array(L2)      # リストをNumpyの配列に変換
-            index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
-            Beam2 = []
-            for j in range(len(index1)):
-                Beam2.append(Beams[index1[j]])
-            #next
-            E_data2 += Beam2
+            return E_data2
+        else:
+            return E_data
         #end if
-        return E_data2
     
     #end def
 
@@ -423,41 +439,131 @@ class ChartReader:
     #end def
         
     #============================================================================
-    #　複数ページのPDFファイルから梁データまたは柱データを抽出する関数
+    #　複数ページのPDFファイルから梁データまたは柱データを抽出し、リストを返す関数
     #============================================================================
-    def Read_Members_from_pdf(self, pdf_path):
+    def Read_Members_from_pdf(self, pdf_path,stpage1=1,edpage1=100):
 
         # CR = ChartReader()
-        with pdfplumber.open(pdf_path) as pdf:
+        BeamData = []
+        ColumnData = []
 
-            BeamData = []
-            ColumnData = []
-            for pageN, page in enumerate(pdf.pages):
+        try:
+            if stpage1>0:
+                stpage = stpage1
+            else:
+                stpage = 1
+            #end if
+            if edpage1 > 0:
+                edpage = edpage1
+            else:
+                edpage = 100
+            #end if
+                
+            with pdfplumber.open(pdf_path) as pdf:
 
-                if pageN >= 0:
-                    print("page = {}".format(pageN+1),end="")
+                BeamData = []
+                ColumnData = []
+                for pageN, page in enumerate(pdf.pages):
+                    if pageN >= stpage -1 and pageN <= edpage -1:
 
-                    # page_lines = self.Read_Word_From_Page(page)
-
-                    BeamData1, ColumnData1 = self.ElementFinder(page)
-
-                    print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
-                    if len(BeamData1) > 0:
-                        BeamData += BeamData1
-                    #end if
-                    if len(ColumnData1) > 0:
-                        ColumnData += ColumnData1
-                    #end if
-            #next
-        #end with
-        
-        # 階および符号名でデータの並び替え
                     
-        BeamData = self.Sort_Element(BeamData, ItemName="梁符号", sc=-1)    # sc=-1:降順,sc=1:昇順
+                        print("page = {}".format(pageN+1),end="")
 
-        ColumnData = self.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
+                        # page_lines = self.Read_Word_From_Page(page)
 
+                        BeamData1, ColumnData1 = self.ElementFinder(page)
+
+                        print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
+                        if len(BeamData1) > 0:
+                            BeamData += BeamData1
+                        #end if
+                        if len(ColumnData1) > 0:
+                            ColumnData += ColumnData1
+                        #end if
+                    #end if
+                    
+                #next
+                #end with
+        
+                # 階および符号名でデータの並び替え
+                            
+                BeamData = self.Sort_Element(BeamData, ItemName="梁符号", sc=-1)    # sc=-1:降順,sc=1:昇順
+
+                ColumnData = self.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
+        except:
+            print('Exception!')
+            flag = False
+        #end try
         return BeamData, ColumnData
+
+    # #end def
+
+
+    #============================================================================
+    #　pdfファイルから梁データと柱データを抽出し、pickleファイルに書き出す関数
+    #============================================================================
+    def Read_and_Save_Members_To_Pickle(self, pdf_path, pickle_path,stpage1=1 ,edpage1=100):
+
+        if pdf_path =="" or pickle_path == "":
+            return False
+        #end if
+        
+        flag = True
+        try:
+            if stpage1>0:
+                stpage = stpage1
+            else:
+                stpage = 1
+            #end if
+            if edpage1 > 0:
+                edpage = edpage1
+            else:
+                edpage = 100
+            #end if
+            
+            with pdfplumber.open(pdf_path) as pdf:
+
+                BeamData = []
+                ColumnData = []
+                for pageN, page in enumerate(pdf.pages):
+
+                    if pageN >= stpage -1 and pageN <= edpage -1:
+                        print("page = {}".format(pageN+1),end="")
+
+                        # page_lines = self.Read_Word_From_Page(page)
+
+                        BeamData1, ColumnData1 = self.ElementFinder(page)
+
+                        print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
+                        if len(BeamData1) > 0:
+                            BeamData += BeamData1
+                        #end if
+                        if len(ColumnData1) > 0:
+                            ColumnData += ColumnData1
+                        #end if
+                    #end if
+                #next
+            #end with
+            
+            # 階および符号名でデータの並び替え
+            if len(BeamData) > 0 or len(ColumnData) >0 :
+
+                BeamData = self.Sort_Element(BeamData, ItemName="梁符号", sc=-1)    # sc=-1:降順,sc=1:昇順
+
+                ColumnData = self.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
+
+                self.Save_MemberData_Picle(pickle_path, BeamData, ColumnData)
+
+                flag = True
+            else:
+                flag = False
+            #end if
+        except:
+            print('Exception!')
+            flag = False
+        #end try
+
+        return flag
 
     # #end def
 
@@ -555,7 +661,62 @@ class ChartReader:
         self.柱符号 = wordsByKind["柱符号"]
         self.柱符号2 = wordsByKind["柱符号2"]
         self.構造計算書 = wordsByKind["構造計算書"]
+        self.同上 = wordsByKind["同上"]
         self.断面リスト = wordsByKind["断面リスト"]
+        self.階上項目 = wordsByKind["階上項目"]
+
+        self.ColumnPitch = 0
+        if len(self.柱符号)>0:
+            itemXmin = 10000
+            self.ColumnPitch = 0
+            xm1 = self.柱符号[0]["xm"]
+            x0 = self.柱符号[0]["x0"]
+            if x0 < itemXmin:
+                itemXmin = x0
+            #end if
+            row1 = self.柱符号[0]["row"]
+            for i in range(1,len(self.柱符号)):
+                xm2 = self.柱符号[i]["xm"]
+                row2 = self.柱符号[i]["row"]
+                
+                if row2 == row1 :
+                    self.ColumnPitch = abs(xm1 - xm2)
+                    break
+                #end if
+            #next
+        #end if
+        self.beamPitch = 0
+        if len(self.梁符号)>0:
+            itemXmin = 10000
+            self.beamPitch = 0
+            xm1 = self.梁符号[0]["xm"]
+            x0 = self.梁符号[0]["x0"]
+            if x0 < itemXmin:
+                itemXmin = x0
+            #end if
+            row1 = self.梁符号[0]["row"]
+            for i in range(1,len(self.梁符号)):
+                xm2 = self.梁符号[i]["xm"]
+                row2 = self.梁符号[i]["row"]
+                
+                if row2 == row1 :
+                    self.beamPitch = abs(xm1 - xm2)
+                    break
+                #end if
+            #next
+        #end if
+                
+        self.itemPitch = 0
+        if self.beamPitch>0:
+            self.itemPitch = self.beamPitch
+        else:
+            if self.ColumnPitch>0:
+                self.itemPitch = self.ColumnPitch
+            #end if
+        #end if
+        if self.itemPitch == 0:
+            self.itemPitch = 72
+        #end if
 
         itemXmin = 10000
         itemYmin = 10000
@@ -698,7 +859,7 @@ class ChartReader:
         #end if
 
         # 各部材の項目名Itemに""を追加
-        ItemName = ["梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり",
+        ItemName = ["同上","梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり",
                     "柱符号","柱符号2","腹筋","フープ筋","材料","片持梁符号"]
         for Item in ItemName:
             if len(getattr(self, Item))>0:
@@ -739,13 +900,15 @@ class ChartReader:
                                 flag = True
                             # elif "スターラップ" in d["text"]:
                             #     flag = True
-                            #end if
+                            # end if
                             
                             if flag:
                                 d2.append(d)
                             #end if
                         #end if
                     #next
+                    # 項目1が無かった場合に登録外項目を探す
+                    # if len(d2) == 0:
                     if len(self.登録外項目)>0:
                         for d in self.登録外項目:
                             row1 = d["row"]
@@ -760,7 +923,7 @@ class ChartReader:
                             #end if
                         #next
                     #end if
-
+                    #end if
                             
                     # 項目名の決定
                     if len(d2) == 1:
@@ -868,33 +1031,93 @@ class ChartReader:
 
 
         if len(self.階) > 0:
-            # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
+        
+            if len(self.階上項目)>0:
+                # 階上項目（階、符号など）がある場合
+                # 階のデータのうち、上端３行と下端３行およびxmが階上項目の直下にないデータは除外する
+                階2 = []
+                for d in self.階:
+                    flag = False
+                    xm = d["xm"]
+                    if d["row"] > 3 and d["row"] < self.rowmax-3:
+                        for d1 in self.階上項目:
+                            x0 = d1["x0"]
+                            x1 = d1["x1"]
+                            if xm > x0 and xm < x1:
+                                flag = True
+                                break
+                            #end if
+                        #next
+                    #next
+                    if flag:
+                        階2.append(d)
+                    #end if
+                #next
+                self.階 = 階2 
+            else:
+                階2 = []
+                for d in self.階:
+                    flag = False
+                    xm = d["xm"]
+                    if d["row"] > 3 and d["row"] < self.rowmax-3:
+                        for d1 in self.項目名1:
+                            x0 = d1["xm"] - self.itemPitch*1.0
+                            x1 = d1["x1"] #+ self.itemPitch*0.5
+                            if xm > x0 and xm < x1:
+                                flag = True
+                                break
+                            #end if
+                        #next
+                    #next
+                    if flag:
+                        階2.append(d)
+                    #end if
+                #next
+                self.階 = 階2 
+                # # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
+                # 階2 = []
+                # for d in self.階:
+                #     if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
+                #         階2.append(d)
+                #     #end if
+                # #next
+                # self.階 = 階2        
+            #end if
+                
+            # if len(self.階) > 0:
+            flag = [0] * len(self.階)
+            # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
             階2 = []
-            for d in self.階:
-                if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
-                    階2.append(d)
+
+            for i in range(len(self.階)):
+                if flag[i] == 0:
+                    row0 = self.階[i]["row"]
+                    xm0 = self.階[i]["xm"]
+                    d0 = self.階[i]
+                    text0 = self.階[i]["text"]
+                    for j in range(len(self.階)):
+                        if i != j and flag[j] == 0 :
+                            row = self.階[j]["row"]
+                            xm = self.階[j]["xm"]
+                            y1 = self.階[j]["y1"]
+                            text = self.階[j]["text"]
+                            d1 = self.階[j]
+                            if row - row0 < 6 and abs(xm - xm0) < 72:
+                                text0 += " , " + text
+                                d0["text"] = text0
+                                d0["y1"] = y1
+                                flag[j] = 1
+                            #end if
+                        #next
+                    #next
+                    階2.append(d0)
+                    flag[i] = 1
                 #end if
             #next
-            self.階 = 階2        
-            
-            if len(self.階) > 0:
-                # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
-                階2 = []
-                row0 = self.階[0]["row"]
-                xm0 = self.階[0]["xm"]
-                階2.append(self.階[0])
-                for i in range(1, len(self.階)):
-                    row = self.階[i]["row"]
-                    xm = self.階[i]["xm"]
-                    if row - row0 > 6 or abs(xm - xm0) > 72:
-                        階2.append(self.階[i])
-                    else:
-                        階2[i-1]["text"] += " , " + self.階[i]["text"]
-                    #end if
-                    row0 = row
-                    xm0 = xm
-                #end if
-                self.階 = 階2
+            self.階 = 階2 
+                # a=0
+
+                # self.階 = 階2
             #end if
         #end if
 
@@ -923,11 +1146,12 @@ class ChartReader:
         # 梁部材の抽出
         #===================================
         
+
         dn = len(self.梁断面位置)
         Section = []
         Section2 = []
         BeamData = []
-        if dn > 0 and len(self.梁符号) > 0:
+        if dn > 0 and len(self.梁符号) > 0 and len(self.主筋) > 0 and len(self.断面寸法) > 0:
             flag = [0] * dn
             for i in range(dn):
                 if flag[i] == 0 :
@@ -1859,7 +2083,7 @@ class ChartReader:
         Section2 = []
         ColumnData = []
         dn = len(self.柱符号)
-        if dn > 0 :
+        if dn > 0 and len(self.主筋) > 0 and len(self.断面寸法) > 0  :
             flag = [0] * dn
             for i in range(dn):
                 if flag[i] == 0 :
@@ -1875,6 +2099,8 @@ class ChartReader:
                     dic["row"] = self.柱符号[i]["row"]
                     dic["xm"] = self.柱符号[i]["xm"]
                     dic["y0"] = self.柱符号[i]["y0"]
+                    dic["x0"] = self.柱符号[i]["x0"]
+                    dic["x1"] = self.柱符号[i]["x1"]
                     dic["item"] = self.柱符号[i]["item"]
                     sn2.append([dic])
                     Section2.append(sn2)
@@ -1961,7 +2187,7 @@ class ChartReader:
                 row1 = Section[i][0]["row"]
                 rmax = Section[i][0]["rmax"]
                 
-                ItemName = ["柱符号2","断面寸法","主筋","フープ筋","かぶり","材料"]
+                ItemName = ["同上","柱符号2","断面寸法","主筋","フープ筋","かぶり","材料"]
                 
                 for Item in ItemName:
                     if len(getattr(self, Item)) > 0:
@@ -1980,6 +2206,8 @@ class ChartReader:
                                 dic["row"] = d1["row"]
                                 dic["xm"] = d1["xm"]
                                 dic["y0"] = d1["y0"]
+                                dic["x0"] = d1["x0"]
+                                dic["x1"] = d1["x1"]
                                 dic["item"] = d1["item"]
                                 data.append(dic)
                                 # Section2[i][j].append(dic)
@@ -1994,6 +2222,8 @@ class ChartReader:
                                 dic["row"] = data[0]["row"]
                                 dic["xm"] = data[0]["xm"]
                                 dic["y0"] = d1["y0"]
+                                dic["x0"] = d1["x0"]
+                                dic["x1"] = d1["x1"]
                                 dic["item"] = d1["item"]
                                 s2.append(dic)
                                 for j in range(len(Section2[i])):
@@ -2033,7 +2263,8 @@ class ChartReader:
                     
                 #next :(for Item in ItemName:)
                                             
-
+                
+                                
                 if len(self.階)>0:
                     ItemName2 = ["階"]
                     
@@ -2043,10 +2274,12 @@ class ChartReader:
                         xm1 = Section[i][0]["xm"]
                         for Item in ItemName2:
                             # data = []
+                            dic2 = []
                             for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                                 xm = d1["xm"]
                                 row = d1["row"]
-                                if row >= row1 and row <= rmax and xm < xm1:
+                                # if row >= row1 and row <= rmax and xm < xm1 and abs(xm1-xm)<self.ColumnPitch*3.0:
+                                if row >= row1 and row <= rmax and xm < xm1 and xm < xm1:
                                     # data.append(d1)
                                     dic = {}
                                     dic["kind"] = d1["kind"]
@@ -2071,16 +2304,26 @@ class ChartReader:
                                     dic["row"] = d1["row"]
                                     dic["xm"] = d1["xm"]
                                     dic["y0"] = d1["y0"]
+                                    dic["y1"] = d1["y1"]
+                                    dic["x0"] = d1["x0"]
+                                    dic["x1"] = d1["x1"]
                                     dic["item"] = d1["item"]
+
+                                    dic2.append(dic)
                                     Section2[i][j].append(dic)
                                 #end if
+                                
+
                             #next
+                            if len(dic2)>1 :
+                                a=0
                             # Section[i][j][Item] = data
                         #next
                     #next
                 
                 #end if
-            #next
+
+            
 
             Section22 = []
             for Sec in Section2:
@@ -2124,6 +2367,34 @@ class ChartReader:
                 #end if
             #next
             Section3.append(Section22)
+
+
+            # 表が横または縦に複数ある場合は分ける。
+            Section3 = []
+            Section22 = []
+            row0 = Section2[0][0][0]["row"]
+            xm0 = Section2[0][0][0]["xm"]
+            x00 = Section2[0][0][0]["x0"]
+            x01 = Section2[0][0][0]["x1"]
+            for j, Sec in enumerate(Section2):
+                row1 = Sec[0][0]["row"]
+                xm1 = Sec[0][0]["xm"]
+                if row0 == row1 and abs(xm1 - xm0) < self.ColumnPitch * 1.5:
+                    Section22.append(Sec)
+                else:
+                    Section3.append(Section22)
+                    Section22 = []
+                    Section22.append(Sec)
+                    xm0 = Sec[0][0]["xm"]
+                    row0 = Sec[0][0]["row"]
+                    x00 = Sec[0][0]["x0"]
+                    x01 = Sec[0][0]["x1"]
+                #end if
+                a=0
+                # Section3.append(Section22)
+            #next
+            Section3.append(Section22)
+
 
             # 表毎に空欄がある場合はno dataを追加する        
             Section33 = []
@@ -2210,7 +2481,7 @@ class ChartReader:
                         #end if
                         for kind1 in kind:
                             if keyname == kind1:
-                                kindSameN[kind1].append([j,bd["y0"]])
+                                kindSameN[kind1].append([j,bd["y0"],bd["xm"]])
                                 break
                             #end if
                         #next
@@ -2227,11 +2498,13 @@ class ChartReader:
                             ln2 = []
                             n0 = ln[0][0]
                             y0 = ln[0][1]
+                            xm0 = ln[0][2]
                             ln2.append(n0)
                             for k in range(1,len(ln)):
                                 n1 = ln[k][0]
                                 y1 = ln[k][1]
-                                if abs(y0-y1) < self.ypitch * 2.0 :
+                                xm1 = ln[k][2]
+                                if abs(y0-y1) < self.ypitch * 2.0 and abs(xm0 - xm1)<self.ColumnPitch/4 :
                                     ln2.append(ln[k][0])
                                     n0 = ln[k][0]
                                     y0 = ln[k][1]
@@ -2426,7 +2699,7 @@ class ChartReader:
             BeamData= self.MakeBeamData()
             ColumnData = self.MakeColumnData()
         #end if
-
+        # print(len(BeamData),len(ColumnData))
         return BeamData , ColumnData
     
     #end def
@@ -2502,8 +2775,6 @@ class ChartReader:
         #end if
     #end def
 
-
-
     #============================================================================
     #　梁データまたは柱データをpickleファイルに書き出す関数
     #============================================================================
@@ -2536,6 +2807,141 @@ class ChartReader:
     #end if
 
 
+    #============================================================================
+    #  表紙以外のページのチェック（外部から読み出す関数名）
+    #============================================================================
+
+    def PageCheck(self,filename, outdir, psn, PageNumber,ProcessN):
+        global flag1, fname, dir1, dir2, dir3, dir4, dir5, folderName, paraFileName
+        global ErrorFlag, ErrorMessage
+        
+        if filename =="" :
+            return False
+        #end if
+        print(filename)
+        pdf_file = filename
+
+        # PyPDF2のツールを使用してPDFのページ情報を読み取る。
+        # PDFのページ数と各ページの用紙サイズを取得
+        PaperSize = []
+        self.PaperRotate = []                
+        try:
+            with open(pdf_file, "rb") as input:
+                reader = PR2(input)
+                PageMax = len(reader.pages)     # PDFのページ数
+                # PaperSize = []
+                # PaperRotate = []
+                for page in reader.pages:       # 各ページの用紙サイズの読取り
+                    p_size = page.mediabox
+                    rotate = page.get('/Rotate', 0)
+                    self.PaperRotate.append(rotate)
+                    page_xmin = float(page.mediabox.lower_left[0])
+                    page_ymin = float(page.mediabox.lower_left[1])
+                    page_xmax = float(page.mediabox.upper_right[0])
+                    page_ymax = float(page.mediabox.upper_right[1])
+                    PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
+            #end with
+        except OSError as e:
+            print(e)
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        except:
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        #end try
+        
+        #=============================================================
+        # startpage = 1
+        # endpage = PageMax
+        
+        # # PDFMinerのツールの準備
+        # resourceManager = PDFResourceManager()
+        # # PDFから単語を取得するためのデバイス
+        # device = PDFPageAggregator(resourceManager, laparams=LAParams())
+        # # PDFから１文字ずつを取得するためのデバイス
+        # device2 = PDFPageAggregator(resourceManager)
+
+        pageResultData = []
+        pageNo = []
+        BeamData = []
+        ColumnData = []
+        try:
+            
+            with pdfplumber.open(pdf_file) as pdf:
+                # interpreter = PDFPageInterpreter(resourceManager, device)
+                # interpreter2 = PDFPageInterpreter(resourceManager, device2)
+
+                PageData = []
+                for page in pdf.pages:
+                # for page in PDFPage.get_pages(PDF):
+                    PageData.append(page)
+                #next
+                pageI = 0
+                # pageI2 = 0
+                # PageN2 = len(PageNumber)
+                flagPage = True
+
+                while flagPage:
+                    for i,p in enumerate(PageNumber):
+                        flagPage = False
+                        if p > 0:
+                            pageI = i + 1
+                            PageNumber[i] = 0
+                            flagPage = True
+                            page = PageData[i]
+                            ProcessN[psn] += 1
+                            break
+                        #end if
+                    #next
+                    if flagPage == False:
+                        break
+                    #end if
+
+                    # outfile = outdir + "/" + "outfile{:0=4}.pdf".format(pageI)
+                    ResultData = []
+                    print("ps={}:page={}:".format(psn,pageI), end="")
+
+                    BeamData1, ColumnData1 = self.ElementFinder(page)
+
+                    # print(len(BeamData1),len(ColumnData1))
+
+                    if len(BeamData1) > 0:
+                            BeamData += BeamData1
+                    #end if
+                    if len(ColumnData1) > 0:
+                        ColumnData += ColumnData1
+                    #end if
+
+                #next
+
+                # fp.close()
+                folderName = ""
+                # os.remove("./kind.txt")
+            # end with
+            
+            if len(BeamData)>0 or len(ColumnData)>0:
+                filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
+                filename2 = filename2.replace("/in/","/out/")
+                self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
+            #end if
+
+        except OSError as e:
+            print(e)
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            # print("******1")
+            return False
+        except:
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            # print("***********2")
+            return False
+        # end try
+
+        # すべての処理がエラーなく終了したのでTrueを返す。
+        return True
+
+    #end def    
+    #*********************************************************************************
+
 
 #end class
     
@@ -2560,32 +2966,15 @@ if __name__ == '__main__':
 
     # pdffname.append("ミックスデータ.pdf")
     
-    pdffname.append("構造図テストデータ.pdf")
-    pdffname.append("構造計算書テストデータ.pdf")
+    # pdffname.append("構造図テストデータ.pdf")
+    # pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
-    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
     # pdffname.append("02構造図.pdf")
     # pdffname.append("02一貫計算書（一部）.pdf")
 
-
-    # pdfname = "構造図テストデータ.pdf"
-    # pdfname = "構造計算書テストデータ.pdf"
-    
-    # pdfname = "(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf"
-    # pdfname = "(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf"
-    
-    # pdfname = "構造計算書の部材表.pdf"
-    # pdfname = "構造計算書の部材表（柱のみ）.pdf"
-    # pdfname = "構造計算書の基礎梁のみ.pdf"
-    
-    # pdfname = "01(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf"
-    # pdfname = "03sawarabi 京都六角 計算書 (事前用).pdf"
-    # pdfname = "03構造計算書（部材リストのみ）.pdf"
-    # pdfname = "構造計算書断面リスト1.pdf"
-    
-    # pdfname = "02一貫計算書（一部）.pdf"
 
     Folder1 = "PDF"
     Folder2 = "CSV"
@@ -2600,14 +2989,30 @@ if __name__ == '__main__':
 
             CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
 
-            filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
-            filename2 = Folder3 + "/"+ filename2
+        #     filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
+        #     filename2 = Folder3 + "/"+ filename2
 
-            CR.Save_MemberData_Picle(filename2, BeamData , ColumnData )
+        #     # CR.Save_MemberData_Picle(filename2, BeamData , ColumnData )
 
-            BeamData2 , ColumnData2 = CR.Load_MemberData_Picle(filename2)
-            a=0
-        #end if
+        #     CR.Read_and_Save_Members_To_Pickle(filename,filename2)
+
+        #     # BeamData2 , ColumnData2 = CR.Load_MemberData_Picle(filename2)
+        #     a=0
+        # #end if
+            
+        # filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
+        # filename = Folder2 + "/"+ filename
+
+        # CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
+
+
+        filename = Folder1 + "/"+ pdf
+
+        filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
+        filename2 = Folder3 + "/"+ filename2
+
+        CR.Read_and_Save_Members_To_Pickle(filename,filename2)
+
     #next
     
     time_end = time.time()  # 終了時刻の記録

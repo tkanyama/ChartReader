@@ -88,18 +88,9 @@ class ChartReader:
                 else:
                     if "," in floor:
                         floor2 = floor.split(",")
-                        if floor2[0].isnumeric():
-                            L2.append(int(floor2[0]))
-                        else:
-                            L2.append(0)
-                        #end if
-                        
+                        L2.append(int(floor2[0]))
                     else:
-                        if floor.isnumeric():
-                            L2.append(int(floor))
-                        else:
-                            L2.append(0)
-                        #end if
+                        L2.append(int(floor))
                     #end if
                 #end if
                 # L2.append(BeamData[i][0][0])
@@ -441,59 +432,38 @@ class ChartReader:
     #============================================================================
     #　複数ページのPDFファイルから梁データまたは柱データを抽出し、リストを返す関数
     #============================================================================
-    def Read_Members_from_pdf(self, pdf_path,stpage1=1,edpage1=100):
+    def Read_Members_from_pdf(self, pdf_path):
 
         # CR = ChartReader()
-        BeamData = []
-        ColumnData = []
+        with pdfplumber.open(pdf_path) as pdf:
 
-        try:
-            if stpage1>0:
-                stpage = stpage1
-            else:
-                stpage = 1
-            #end if
-            if edpage1 > 0:
-                edpage = edpage1
-            else:
-                edpage = 100
-            #end if
-                
-            with pdfplumber.open(pdf_path) as pdf:
+            BeamData = []
+            ColumnData = []
+            for pageN, page in enumerate(pdf.pages):
 
-                BeamData = []
-                ColumnData = []
-                for pageN, page in enumerate(pdf.pages):
-                    if pageN >= stpage -1 and pageN <= edpage -1:
+                if pageN >= 0:
+                    print("page = {}".format(pageN+1),end="")
 
-                    
-                        print("page = {}".format(pageN+1),end="")
+                    # page_lines = self.Read_Word_From_Page(page)
 
-                        # page_lines = self.Read_Word_From_Page(page)
+                    BeamData1, ColumnData1 = self.ElementFinder(page)
 
-                        BeamData1, ColumnData1 = self.ElementFinder(page)
-
-                        print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
-                        if len(BeamData1) > 0:
-                            BeamData += BeamData1
-                        #end if
-                        if len(ColumnData1) > 0:
-                            ColumnData += ColumnData1
-                        #end if
+                    print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
+                    if len(BeamData1) > 0:
+                        BeamData += BeamData1
                     #end if
-                    
-                #next
-                #end with
+                    if len(ColumnData1) > 0:
+                        ColumnData += ColumnData1
+                    #end if
+            #next
+        #end with
         
-                # 階および符号名でデータの並び替え
-                            
-                BeamData = self.Sort_Element(BeamData, ItemName="梁符号", sc=-1)    # sc=-1:降順,sc=1:昇順
+        # 階および符号名でデータの並び替え
+                    
+        BeamData = self.Sort_Element(BeamData, ItemName="梁符号", sc=-1)    # sc=-1:降順,sc=1:昇順
 
-                ColumnData = self.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
-        except:
-            print('Exception!')
-            flag = False
-        #end try
+        ColumnData = self.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
+
         return BeamData, ColumnData
 
     # #end def
@@ -502,7 +472,7 @@ class ChartReader:
     #============================================================================
     #　pdfファイルから梁データと柱データを抽出し、pickleファイルに書き出す関数
     #============================================================================
-    def Read_and_Save_Members_To_Pickle(self, pdf_path, pickle_path,stpage1=1 ,edpage1=100):
+    def Read_and_Save_Members_To_Pickle(self, pdf_path, pickle_path):
 
         if pdf_path =="" or pickle_path == "":
             return False
@@ -510,24 +480,14 @@ class ChartReader:
         
         flag = True
         try:
-            if stpage1>0:
-                stpage = stpage1
-            else:
-                stpage = 1
-            #end if
-            if edpage1 > 0:
-                edpage = edpage1
-            else:
-                edpage = 100
-            #end if
-            
+    
             with pdfplumber.open(pdf_path) as pdf:
 
                 BeamData = []
                 ColumnData = []
                 for pageN, page in enumerate(pdf.pages):
 
-                    if pageN >= stpage -1 and pageN <= edpage -1:
+                    if pageN >= 0:
                         print("page = {}".format(pageN+1),end="")
 
                         # page_lines = self.Read_Word_From_Page(page)
@@ -541,7 +501,6 @@ class ChartReader:
                         if len(ColumnData1) > 0:
                             ColumnData += ColumnData1
                         #end if
-                    #end if
                 #next
             #end with
             
@@ -665,8 +624,7 @@ class ChartReader:
         self.断面リスト = wordsByKind["断面リスト"]
         self.階上項目 = wordsByKind["階上項目"]
 
-        self.ColumnPitch = 0
-        if len(self.柱符号)>0:
+        if len(self.柱符号):
             itemXmin = 10000
             self.ColumnPitch = 0
             xm1 = self.柱符号[0]["xm"]
@@ -684,38 +642,6 @@ class ChartReader:
                     break
                 #end if
             #next
-        #end if
-        self.beamPitch = 0
-        if len(self.梁符号)>0:
-            itemXmin = 10000
-            self.beamPitch = 0
-            xm1 = self.梁符号[0]["xm"]
-            x0 = self.梁符号[0]["x0"]
-            if x0 < itemXmin:
-                itemXmin = x0
-            #end if
-            row1 = self.梁符号[0]["row"]
-            for i in range(1,len(self.梁符号)):
-                xm2 = self.梁符号[i]["xm"]
-                row2 = self.梁符号[i]["row"]
-                
-                if row2 == row1 :
-                    self.beamPitch = abs(xm1 - xm2)
-                    break
-                #end if
-            #next
-        #end if
-                
-        self.itemPitch = 0
-        if self.beamPitch>0:
-            self.itemPitch = self.beamPitch
-        else:
-            if self.ColumnPitch>0:
-                self.itemPitch = self.ColumnPitch
-            #end if
-        #end if
-        if self.itemPitch == 0:
-            self.itemPitch = 72
         #end if
 
         itemXmin = 10000
@@ -900,7 +826,7 @@ class ChartReader:
                                 flag = True
                             # elif "スターラップ" in d["text"]:
                             #     flag = True
-                            # end if
+                            #end if
                             
                             if flag:
                                 d2.append(d)
@@ -908,21 +834,21 @@ class ChartReader:
                         #end if
                     #next
                     # 項目1が無かった場合に登録外項目を探す
-                    # if len(d2) == 0:
-                    if len(self.登録外項目)>0:
-                        for d in self.登録外項目:
-                            row1 = d["row"]
-                            left1 = d["x0"]
-                            right1 = d["x1"]
-                            top1 = d["y0"]
-                            bottom1 = d["y1"]
-                            if right1<left0 and top1-self.ypitch*1.0 < top0 and bottom1+self.ypitch*1.0 > bottom0:
-                            
-                                d2.append(d)
+                    if len(d2) == 0:
+                        if len(self.登録外項目)>0:
+                            for d in self.登録外項目:
+                                row1 = d["row"]
+                                left1 = d["x0"]
+                                right1 = d["x1"]
+                                top1 = d["y0"]
+                                bottom1 = d["y1"]
+                                if right1<left0 and top1-self.ypitch*1.0 < top0 and bottom1+self.ypitch*1.0 > bottom0:
+                                
+                                    d2.append(d)
+                                    #end if
                                 #end if
-                            #end if
-                        #next
-                    #end if
+                            #next
+                        #end if
                     #end if
                             
                     # 項目名の決定
@@ -1031,7 +957,7 @@ class ChartReader:
 
 
         if len(self.階) > 0:
-        
+
             if len(self.階上項目)>0:
                 # 階上項目（階、符号など）がある場合
                 # 階のデータのうち、上端３行と下端３行およびxmが階上項目の直下にないデータは除外する
@@ -1055,69 +981,81 @@ class ChartReader:
                 #next
                 self.階 = 階2 
             else:
+                # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
                 階2 = []
                 for d in self.階:
-                    flag = False
-                    xm = d["xm"]
-                    if d["row"] > 3 and d["row"] < self.rowmax-3:
-                        for d1 in self.項目名1:
-                            x0 = d1["xm"] - self.itemPitch*1.0
-                            x1 = d1["x1"] #+ self.itemPitch*0.5
-                            if xm > x0 and xm < x1:
-                                flag = True
-                                break
-                            #end if
-                        #next
-                    #next
-                    if flag:
+                    if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
                         階2.append(d)
                     #end if
                 #next
-                self.階 = 階2 
-                # # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
-                # 階2 = []
-                # for d in self.階:
-                #     if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
-                #         階2.append(d)
-                #     #end if
-                # #next
-                # self.階 = 階2        
+                self.階 = 階2        
             #end if
                 
-            # if len(self.階) > 0:
-            flag = [0] * len(self.階)
-            # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
-            階2 = []
+            if len(self.階) > 0:
+                flag = [0] * len(self.階)
+                # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
+                階2 = []
 
-            for i in range(len(self.階)):
-                if flag[i] == 0:
-                    row0 = self.階[i]["row"]
-                    xm0 = self.階[i]["xm"]
-                    d0 = self.階[i]
-                    text0 = self.階[i]["text"]
-                    for j in range(len(self.階)):
-                        if i != j and flag[j] == 0 :
-                            row = self.階[j]["row"]
-                            xm = self.階[j]["xm"]
-                            y1 = self.階[j]["y1"]
-                            text = self.階[j]["text"]
-                            d1 = self.階[j]
-                            if row - row0 < 6 and abs(xm - xm0) < 72:
-                                text0 += " , " + text
-                                d0["text"] = text0
-                                d0["y1"] = y1
-                                flag[j] = 1
-                            #end if
+                for i in range(len(self.階)):
+                    if flag[i] == 0:
+                        row0 = self.階[i]["row"]
+                        xm0 = self.階[i]["xm"]
+                        d0 = self.階[i]
+                        text0 = self.階[i]["text"]
+                        for j in range(len(self.階)):
+                            if i != j and flag[j] == 0 :
+                                row = self.階[j]["row"]
+                                xm = self.階[j]["xm"]
+                                y1 = self.階[j]["y1"]
+                                text = self.階[j]["text"]
+                                d1 = self.階[j]
+                                if row - row0 < 6 and abs(xm - xm0) < 72:
+                                    text0 += " , " + text
+                                    d0["text"] = text0
+                                    d0["y1"] = y1
+                                    flag[j] = 1
+                                #end if
+                            #next
                         #next
-                    #next
-                    階2.append(d0)
-                    flag[i] = 1
-                #end if
-            #next
-            self.階 = 階2 
-                # a=0
+                        階2.append(d0)
+                        flag[i] = 1
+                    #end if
+                #next
+                self.階 = 階2 
+                a=0
 
-                # self.階 = 階2
+
+                # row0 = self.階[0]["row"]
+                # xm0 = self.階[0]["xm"]
+                # 階2.append(self.階[0])
+                # for i in range(1, len(self.階)):
+                #     row = self.階[i]["row"]
+                #     xm = self.階[i]["xm"]
+                #     if row - row0 > 6 or abs(xm - xm0) > 72:
+                #         階2.append(self.階[i])
+                #     else:
+                #         階2[i-1]["text"] += " , " + self.階[i]["text"]
+                #     #end if
+                #     row0 = row
+                #     xm0 = xm
+                # #end if
+
+
+                # row0 = self.階[0]["row"]
+                # xm0 = self.階[0]["xm"]
+                # 階2.append(self.階[0])
+                # for i in range(1, len(self.階)):
+                #     row = self.階[i]["row"]
+                #     xm = self.階[i]["xm"]
+                #     if row - row0 > 6 or abs(xm - xm0) > 72:
+                #         階2.append(self.階[i])
+                #     else:
+                #         階2[i-1]["text"] += " , " + self.階[i]["text"]
+                #     #end if
+                #     row0 = row
+                #     xm0 = xm
+                # #end if
+                self.階 = 階2
             #end if
         #end if
 
@@ -1146,12 +1084,11 @@ class ChartReader:
         # 梁部材の抽出
         #===================================
         
-
         dn = len(self.梁断面位置)
         Section = []
         Section2 = []
         BeamData = []
-        if dn > 0 and len(self.梁符号) > 0 and len(self.主筋) > 0 and len(self.断面寸法) > 0:
+        if dn > 0 and len(self.梁符号) > 0:
             flag = [0] * dn
             for i in range(dn):
                 if flag[i] == 0 :
@@ -1635,7 +1572,7 @@ class ChartReader:
                 #======================================================================
                 #   梁断面位置に各部材を追加する
                 #
-                ItemName = ["梁符号2","断面寸法","主筋","フープ筋","かぶり","材料","腹筋"]
+                ItemName = ["同上","梁符号2","断面寸法","主筋","フープ筋","かぶり","材料","腹筋"]
                 
                 for Item in ItemName:
                     data = []
@@ -2083,7 +2020,7 @@ class ChartReader:
         Section2 = []
         ColumnData = []
         dn = len(self.柱符号)
-        if dn > 0 and len(self.主筋) > 0 and len(self.断面寸法) > 0  :
+        if dn > 0 :
             flag = [0] * dn
             for i in range(dn):
                 if flag[i] == 0 :
@@ -2099,6 +2036,7 @@ class ChartReader:
                     dic["row"] = self.柱符号[i]["row"]
                     dic["xm"] = self.柱符号[i]["xm"]
                     dic["y0"] = self.柱符号[i]["y0"]
+                    dic["y1"] = self.柱符号[i]["y1"]
                     dic["x0"] = self.柱符号[i]["x0"]
                     dic["x1"] = self.柱符号[i]["x1"]
                     dic["item"] = self.柱符号[i]["item"]
@@ -2206,6 +2144,7 @@ class ChartReader:
                                 dic["row"] = d1["row"]
                                 dic["xm"] = d1["xm"]
                                 dic["y0"] = d1["y0"]
+                                dic["y1"] = d1["y1"]
                                 dic["x0"] = d1["x0"]
                                 dic["x1"] = d1["x1"]
                                 dic["item"] = d1["item"]
@@ -2222,6 +2161,7 @@ class ChartReader:
                                 dic["row"] = data[0]["row"]
                                 dic["xm"] = data[0]["xm"]
                                 dic["y0"] = d1["y0"]
+                                dic["y1"] = d1["y1"]
                                 dic["x0"] = d1["x0"]
                                 dic["x1"] = d1["x1"]
                                 dic["item"] = d1["item"]
@@ -2263,8 +2203,7 @@ class ChartReader:
                     
                 #next :(for Item in ItemName:)
                                             
-                
-                                
+
                 if len(self.階)>0:
                     ItemName2 = ["階"]
                     
@@ -2278,8 +2217,7 @@ class ChartReader:
                             for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                                 xm = d1["xm"]
                                 row = d1["row"]
-                                # if row >= row1 and row <= rmax and xm < xm1 and abs(xm1-xm)<self.ColumnPitch*3.0:
-                                if row >= row1 and row <= rmax and xm < xm1 and xm < xm1:
+                                if row >= row1 and row <= rmax and xm < xm1 and abs(xm1-xm)<self.ColumnPitch*3.0:
                                     # data.append(d1)
                                     dic = {}
                                     dic["kind"] = d1["kind"]
@@ -2316,14 +2254,13 @@ class ChartReader:
 
                             #next
                             if len(dic2)>1 :
-                                a=0
+                                    a=0
                             # Section[i][j][Item] = data
                         #next
                     #next
                 
                 #end if
-
-            
+            #next
 
             Section22 = []
             for Sec in Section2:
@@ -2346,28 +2283,30 @@ class ChartReader:
             #next
             Section2 = Section22
             
+            # Section22 = []
+            # for Sec in Section2:
+            #     flag = True
+            #     同上=[]
+            #     for d in Sec[0]:
+            #         if d["kind"] == "同上":
+            #             同上.append(d)
+            #             flag = False
+            #         #end if
+            #     #next
+            #     if flag:
+            #         Section22.append(Sec)
+            #     else:
+            #         data = []
+
+                    
+
+                    
+            # a=0
+
 
             #==========================================================
             # 表に空欄がある場合にそこに「no data」を追加する処理（柱のみの処理）
             #==========================================================
-
-            # 表が縦に複数ある場合は分ける。
-            Section3 = []
-            Section22 = []
-            row0 = Section2[0][0][0]["row"]
-            for j, Sec in enumerate(Section2):
-                row1 = Sec[0][0]["row"]
-                if row0 == row1 :
-                    Section22.append(Sec)
-                else:
-                    Section3.append(Section22)
-                    Section22 = []
-                    Section22.append(Sec)
-                    row0 = Sec[0][0]["row"]
-                #end if
-            #next
-            Section3.append(Section22)
-
 
             # 表が横または縦に複数ある場合は分ける。
             Section3 = []
@@ -2395,56 +2334,189 @@ class ChartReader:
             #next
             Section3.append(Section22)
 
-
-            # 表毎に空欄がある場合はno dataを追加する        
-            Section33 = []
-            for Section2 in Section3:
-                SecKeys = []
-                KeyN = []
-                KeyNmax = 0
-                KeyPos = -1
-                for i, Sec in enumerate(Section2):
-                    SecKey = []
-                    for D in Sec[0]:
-                        SecKey.append(D["kind"])
+            # 表毎に空欄がある場合はno dataを追加する
+            if len(self.同上) == 0:
+                # 表に同上がない場合の処理        
+                Section33 = []
+                for Section2 in Section3:
+                    SecKeys = []
+                    KeyN = []
+                    KeyNmax = 0
+                    KeyPos = -1
+                    for i, Sec in enumerate(Section2):
+                        SecKey = []
+                        for D in Sec[0]:
+                            SecKey.append(D["kind"])
+                        #next
+                        SecKeys.append(SecKey)
+                        n = len(SecKey)
+                        KeyN.append(len(SecKey))
+                        if n > KeyNmax:
+                            KeyNmax = n
+                            KeyPos = i
+                        #end if
                     #next
-                    SecKeys.append(SecKey)
-                    n = len(SecKey)
-                    KeyN.append(len(SecKey))
-                    if n > KeyNmax:
-                        KeyNmax = n
-                        KeyPos = i
-                    #end if
+                    StandardKeys = SecKeys[KeyPos]
+                    StandardData = Section2[KeyPos][0]
+                    Section22 = []
+                    for i, Sec in enumerate(Section2):
+                        Sec2 = []
+                        Sn = len(Sec)
+                        for j in range(Sn):
+                            k = 0
+                            data = []
+                            for m, key0 in enumerate(StandardKeys):
+                                key1 = Sec[j][k]["kind"]
+                                xm = Sec[j][k]["xm"]
+                                if key0 == key1 :
+                                    data.append(Sec[j][k])
+                                    k += 1
+                                else:
+                                    D = StandardData[m]
+                                    D["xm"] = xm
+                                    D["text"] = "no data"
+                                    data.append(D)
+                                #end if
+                            #next
+                            Sec2.append(data) 
+                        #next
+                        Section22.append(Sec2)
+                    #next
+                    Section33 += Section22
                 #next
-                StandardKeys = SecKeys[KeyPos]
-                StandardData = Section2[KeyPos][0]
-                Section22 = []
-                for i, Sec in enumerate(Section2):
-                    Sec2 = []
-                    Sn = len(Sec)
-                    for j in range(Sn):
-                        k = 0
-                        data = []
-                        for m, key0 in enumerate(StandardKeys):
-                            key1 = Sec[j][k]["kind"]
-                            xm = Sec[j][k]["xm"]
-                            if key0 == key1 :
-                                data.append(Sec[j][k])
-                                k += 1
-                            else:
-                                D = StandardData[m]
-                                D["xm"] = xm
-                                D["text"] = "no data"
-                                data.append(D)
+                Section2 = Section33
+            else:
+                Section33 = []
+                for Section2 in Section3:
+                    SecKeys = []
+                    KeyN = []
+                    KeyNmax = 0
+                    KeyPos = -1
+
+                    # データ数が最も多い列を見つけてその列のキーリストを作成する。
+                    for i, Sec in enumerate(Section2):
+                        SecKey = []
+                        for D in Sec[0]:
+                            if D["kind"] != "同上":
+                                SecKey.append(D["kind"])
                             #end if
                         #next
-                        Sec2.append(data) 
+                        SecKeys.append(SecKey)
+                        n = len(SecKey)
+                        KeyN.append(len(SecKey))
+                        if n > KeyNmax:
+                            KeyNmax = n
+                            KeyPos = i
+                        #end if
                     #next
-                    Section22.append(Sec2)
+                    
+                    # データ数が最も多い列のキーリスト
+                    StandardKeys = SecKeys[KeyPos]
+                    # データ数が最も多い列のデータリスト
+                    StandardData = Section2[KeyPos][0]
+
+                    Section22 = []
+                    for i, Sec in enumerate(Section2):
+                        Sec2 = []
+                        Sn = len(Sec)
+                        Skey = ""
+                        for j in range(Sn):
+                            k = 0
+                            data = []
+                            n = 0
+                            DDD = []
+                            m = 0
+                            mflag = True
+                            kmax = len(Sec[j])
+                            mmax = len(StandardKeys)
+                            
+                            while mflag:
+                                # if Dfag:
+                                #     n = 0
+                                #     DDD = []
+                                # #end if
+
+                                key0 = StandardKeys[m]
+                                key1 = Sec[j][k]["kind"]
+                                xm = Sec[j][k]["xm"]
+                                row1 = Sec[j][k]["row"]
+                                y01 = Sec[j][k]["y0"]
+                                y11 = Sec[j][k]["y1"]
+                                dy = y11 - y01
+                                print(key0,key1)
+
+                                if key1 == "階":
+                                    if key0 == key1 :
+                                        data.append(Sec[j][k])
+                                        k += 1
+                                        m += 1
+                                    # key1 = Sec[j][k]["kind"]
+                                    # xm = Sec[j][k]["xm"]
+                                
+                                #     # break
+                                elif key1 == "同上":
+                                    
+                                    for ii in range(n):
+                                        # DD = Sec[j][k]
+                                        DD = DDD[ii].copy()
+                                        # DD["xm"] = xm
+                                        # DD["kind"] = kind2[ii]
+                                        DD["text"] = "同上"
+                                        DD["row"] = row1 + ii + 1
+                                        DD["y0"] = y01 + ii * dy
+                                        DD["y1"] = y11 + ii * dy
+                                        data.append(DD)
+                                    #next
+                                    k += 1
+                                    # key1 = Sec[j][k]["kind"]
+                                    # xm = Sec[j][k]["xm"]
+                                    Dfag = True
+                                else:
+                                    Dfag = False
+
+                                    if Skey == key1:
+                                        n = 0
+                                        DDD = []
+                                    #end if
+                                    if key0 == key1 :
+                                        data.append(Sec[j][k])
+                                        
+                                        if key1 != "柱符号":
+                                            # if n == 0:
+                                            # kind2.append(key1)
+                                            DDD.append(Sec[j][k].copy())
+                                            if n == 0:
+                                                Skey = Sec[j][k]["kind"]
+                                            #end if
+                                            n += 1
+                                            #end if
+                                        #end if
+                                        
+                                        k += 1
+                                        m += 1
+                                        # key1 = Sec[j][k]["kind"]
+                                        # xm = Sec[j][k]["xm"]
+                                    else:
+                                        D = StandardData[m].copy()
+                                        D["xm"] = xm
+                                        D["text"] = "no data"
+                                        D["row"] = row1 + 1
+                                        data.append(D)
+                                    #end if
+                                    # end if
+                                #end if
+                                if k >= kmax or m >= mmax:
+                                    mflag = False
+                                #end if
+                            #end while
+                            Sec2.append(data) 
+                        #next
+                        Section22.append(Sec2)
+                    #next
+                    Section33 += Section22
                 #next
-                Section33 += Section22
-            #next
-            Section2 = Section33
+                Section2 = Section33
+            #end if
 
             # 部材表は複数の部材が縦に並んでいるので部材毎に分割する処理
             for Sec in Section2:
@@ -2453,6 +2525,7 @@ class ChartReader:
                     # データの種類を取得
                     kind = []
                     for bd in bdata:
+                        print(bd["kind"],bd["item"])
                         if bd["item"] !="":
                             keyname = bd["item"]+":"+bd["kind"]
                         else:
@@ -2476,17 +2549,21 @@ class ChartReader:
                     for j, bd in  enumerate(bdata):
                         if bd["item"] !="":
                             keyname = bd["item"]+":"+bd["kind"]
+                            bd["kind"] = keyname
                         else:
                             keyname = bd["kind"]  
                         #end if
                         for kind1 in kind:
                             if keyname == kind1:
-                                kindSameN[kind1].append([j,bd["y0"],bd["xm"]])
-                                break
+                                kindSameN[kind1].append([j,bd["y0"]])
+                                # break
+                            # else:
+                            #     kindSameN[kind1].append([j,[]])
                             #end if
                         #next
                     #next
-                    
+                            
+
                     # 同じ種類のデータがypitchの2倍以内に並ぶ場合は1組のデータとする。
                     kindSameN2 = {}
                     for j, kind1 in enumerate(kind):
@@ -2498,13 +2575,11 @@ class ChartReader:
                             ln2 = []
                             n0 = ln[0][0]
                             y0 = ln[0][1]
-                            xm0 = ln[0][2]
                             ln2.append(n0)
                             for k in range(1,len(ln)):
                                 n1 = ln[k][0]
                                 y1 = ln[k][1]
-                                xm1 = ln[k][2]
-                                if abs(y0-y1) < self.ypitch * 2.0 and abs(xm0 - xm1)<self.ColumnPitch/4 :
+                                if abs(y0-y1) < self.ypitch * 2.0 :
                                     ln2.append(ln[k][0])
                                     n0 = ln[k][0]
                                     y0 = ln[k][1]
@@ -2525,6 +2600,44 @@ class ChartReader:
                             kindSameN2[kind1] = ln3
                         #end if
                     #next
+
+                    
+                    # # 同じ種類のデータがypitchの2倍以内に並ぶ場合は1組のデータとする。
+                    # kindSameN2 = {}
+                    # for j, kind1 in enumerate(kind):
+                    #     ln3 = []
+                    #     ln = kindSameN[kind1]
+                    #     if len(ln) == 1:
+                    #         kindSameN2[kind1] = [[ln[0][0]]]
+                    #     else:
+                    #         ln2 = []
+                    #         n0 = ln[0][0]
+                    #         y0 = ln[0][1]
+                    #         ln2.append(n0)
+                    #         for k in range(1,len(ln)):
+                    #             n1 = ln[k][0]
+                    #             y1 = ln[k][1]
+                    #             if abs(y0-y1) < self.ypitch * 2.0 :
+                    #                 ln2.append(ln[k][0])
+                    #                 n0 = ln[k][0]
+                    #                 y0 = ln[k][1]
+                    #             else:
+                    #                 ln3.append(ln2)
+                    #                 ln2 = []
+                    #                 n0 = ln[k][0]
+                    #                 y0 = ln[k][1]
+                    #                 ln2.append(n0)
+                    #             #end if
+                    #         #next
+                    #         if len(ln2)>0 :
+                    #             ln3.append(ln2)
+                    #         #end if
+                            
+                    #     #end if
+                    #     if len(ln3)>0 :
+                    #         kindSameN2[kind1] = ln3
+                    #     #end if
+                    # #next
                     
                     # 主筋の数を1列にあるデータ数とする。
                     kindSameNMax = len(kindSameN2["主筋"])
@@ -2544,82 +2657,186 @@ class ChartReader:
                     #next
                     keys = keys1
                     
-                    # 同じ柱のデータを柱符号の順番でひとつにまとめる。
-                    beam2 = []            
-                    for bdata in Sec:
+                    beam3 = []
+                    beam = []
+                    bn = len(bdata)
+                    kn = len(keys)
+                    bi = 1
+                    flag = True
+                    while flag:
                         beam = []
-                        for Beami in range(kindSameNMax):
-                            dataDic1 = []
-                            for key in keys:
-                                nn = kindSameN2[key]
-                                if len(nn) == 1:
-                                    n2 = 0
-                                    n1 = nn[0]
-                                    for n in n1:
-                                        n2 += 1
-                                        data = bdata[n]
-                                        if len(nn[0])>1 :
-                                            if not("階" in key) and not("柱符号" in key):
-                                                key2 = key + "-" + str(n2)
-                                            else:
-                                                key2 = key
-                                            #end if
-                                        else:
-                                            key2 = key
-                                        #end if
-                                        dataDic1.append([key2,data["text"]])
-                                    #nex
-                                else:
-                                    n2 = 0
-                                    n1 = nn[Beami]
-                                    for n in n1:
-                                        n2 += 1
-                                        data = bdata[n]
-                                        if len(nn[Beami])>1 :
-                                            if not("階" in key) and not("柱符号" in key):
-                                                key2 = key + "-" + str(n2)
-                                            else:
-                                                key2 = key
-                                            #end if
-                                        else:
-                                            key2 = key
-                                        #end if
-                                        dataDic1.append([key2,data["text"]])
-                                    #next
+                        # bi = 1
+                        beam.append(bdata[0])
+                        bst = bi
+                        bed = bi + len(keys) - 1
+                        if bed > bn :
+                            bed = bn
+                        #end if
+                        nn = 0
+                        for ki, key in enumerate(keys):
+                            if key != "柱符号":
+                                
+                                for j in range(bst,bed):
+                                    key1 = bdata[j]["kind"]
+                                    print(key ,key1)
+                                    if key1 == key:
+                                        beam.append(bdata[j])
+                                        nn += 1
+                                        break
+                                    #end if
                                 #next
-                                #end if
-                            next
-                        
-                            # 表に階のデータが無い場合は梁符号から作成し、追加する。
-                            # FG1 -> 1FL  4G1 -> 4FL
-                            if not("階" in keys):
-                                hname = bdata[kindSameN2["柱符号"][0][0]]["text"]
-                                if hname[0] == "F":
-                                    floorName = "1FL"
-                                else:
-                                    floorName = hname[0] + "FL"
-                                #end if
-                                dataDic1.append(["階",floorName])
+                                
                             #end if
-                            beam.append(dataDic1)
+                        #next
+                        bi += nn
 
-                        #next :(for j in range(kindSameNMax):)
-                            
-                        beam2.append(beam)
-
-                    #next :(for bdata in Sec:)
+                        if len(beam) > 0:
+                            # beam3 = []
+                            flag2 = True
+                            bj = 0
+                            beam2 = []
+                            while flag2:
+                                if beam[bj]["kind"] == "柱符号" or beam[bj]["kind"] == "階":
+                                    beam2.append(beam[bj])
+                                    bj += 1
+                                    if bj >= len(beam):
+                                        flag2 = False
+                                    #end if
+                                else:
+                                    if bj == len(beam)-1:
+                                        beam2.append(beam[bj])
+                                        flag2 = False
+                                        bj += 1
+                                    else:
+                                        ii = 1
+                                        flag3 = True
+                                        kind0 = beam[bj]["kind"]
+                                        bd = [beam[bj]]
+                                        while flag3:
+                                            kind1 = beam[bj+ii]["kind"]
+                                            print(kind0,kind1)
+                                            if kind0 == kind1:
+                                                bd.append(beam[bj+ii])
+                                                ii += 1
+                                                if bj + ii >= len(beam)-1:
+                                                    flag3 = False
+                                                #end if
+                                            else:
+                                                flag3 = False
+                                            #end if
+                                        #end while
+                                        if len(bd)>1:
+                                            for ii in len(bd):
+                                                kind2 = beam[bj + ii]["kind"] + "-" + str(ii+1)
+                                                beam[bj + ii]["kind"] = kind2
+                                                beam2.append(beam[bj + ii])
+                                            #next 
+                                            bj += len(bd)
+                                        else:
+                                            beam2.append(beam[bj])
+                                            bj += 1
+                                        #next
+                                        
+                                        if bj >= len(beam):
+                                            flag2 = False
+                                        #end if
+                                    #end if if bi == len(beam)-1:
+                                #end if beam[bi]["kind"] == "柱符号" or beam[bi]["kind"] == "階":
+                                a=0
+                            # end while flag2:
+                            beam = beam2
+                        #end if if len(beam) > 0:
+                        beam3.append(beam)
                         
-                #next :(for bdata in Sec:)
-                
-                n = len(beam2[0])
-                m = len(beam2)
-                for i in range(n):
-                    beam3= []
-                    for j in range(m):
-                        beam3.append(beam2[j][i])
-                    #next
-                    ColumnData.append(beam3)
+                        if bi >= len(bdata):
+                            flag = False
+                        #end if
+                    #end while
                 #next
+
+                    #end whileflag:
+                ColumnData += beam3
+                    # beam2 = beam3
+                        
+            a=0
+
+                #     # 同じ柱のデータを柱符号の順番でひとつにまとめる。
+                #     beam2 = []            
+                #     # for bdata in Sec:
+                #     beam = []
+                #     for Beami in range(kindSameNMax):
+                #         dataDic1 = []
+                #         for key in keys:
+                #             nn = kindSameN2[key]
+                #             if len(nn) == 1:
+                #                 n2 = 0
+                #                 n1 = nn[0]
+                #                 for n in n1:
+                #                     n2 += 1
+                #                     data = bdata[n]
+                #                     if len(nn[0])>1 :
+                #                         if not("階" in key) and not("柱符号" in key):
+                #                             key2 = key + "-" + str(n2)
+                #                         else:
+                #                             key2 = key
+                #                         #end if
+                #                     else:
+                #                         key2 = key
+                #                     #end if
+                #                     dataDic1.append([key2,data["text"]])
+                #                 #nex
+                #             else:
+                #                 n2 = 0
+                #                 n1 = nn[Beami]
+                #                 for n in n1:
+                #                     n2 += 1
+                #                     data = bdata[n]
+                #                     if len(nn[Beami])>1 :
+                #                         if not("階" in key) and not("柱符号" in key):
+                #                             key2 = key + "-" + str(n2)
+                #                         else:
+                #                             key2 = key
+                #                         #end if
+                #                     else:
+                #                         key2 = key
+                #                     #end if
+                #                     dataDic1.append([key2,data["text"]])
+                #                 #next
+                #             #next
+                #             #end if
+                #         next
+                    
+                #         # 表に階のデータが無い場合は梁符号から作成し、追加する。
+                #         # FG1 -> 1FL  4G1 -> 4FL
+                #         if not("階" in keys):
+                #             hname = bdata[kindSameN2["柱符号"][0][0]]["text"]
+                #             if hname[0] == "F":
+                #                 floorName = "1FL"
+                #             else:
+                #                 floorName = hname[0] + "FL"
+                #             #end if
+                #             dataDic1.append(["階",floorName])
+                #         #end if
+                #         beam.append(dataDic1)
+
+                #     #next :(for j in range(kindSameNMax):)
+                        
+                #     beam2.append(beam)
+
+                #     #next :(for bdata in Sec:)
+                        
+                # #next :(for bdata in Sec:)
+                
+                # ColumnData += beam3
+                # n = len(beam2[0])
+                # m = len(beam2)
+                # for i in range(n):
+                #     beam3= []
+                #     for j in range(m):
+                #         beam3.append(beam2[j][i])
+                #     #next
+                #     ColumnData.append(beam3)
+                # #next
             # #next
         #end if    
 
@@ -2627,57 +2844,57 @@ class ChartReader:
         # 柱データを辞書形式に変換する処理
         #=====================================================================
         
-        ColumnData2 = []
-        for i,beam in enumerate(ColumnData):
-            # 梁データ毎にkeyを取り出す。
-            keys = []
-            for j, data in enumerate(beam):
-                for k in range(len(data)):
-                    if not(data[k][0] in keys):
-                        keys.append(data[k][0])
-                    #end if
-                #next
-            #next
-            # keyの先頭を"階"データにする。
-            keys2 = []
-            for key in keys:
-                if key == "階":
-                    keys2.append(key)
-                    break
-                #end if
-            #next
-            for key in keys:
-                if key != "階":
-                    keys2.append(key)
-                #end if
-            #next
-            keys = keys2
+        # ColumnData2 = []
+        # for i,beam in enumerate(ColumnData):
+        #     # 梁データ毎にkeyを取り出す。
+        #     keys = []
+        #     for j, data in enumerate(beam):
+        #         for k in range(len(data)):
+        #             if not(data[k][0] in keys):
+        #                 keys.append(data[k][0])
+        #             #end if
+        #         #next
+        #     #next
+        #     # keyの先頭を"階"データにする。
+        #     keys2 = []
+        #     for key in keys:
+        #         if key == "階":
+        #             keys2.append(key)
+        #             break
+        #         #end if
+        #     #next
+        #     for key in keys:
+        #         if key != "階":
+        #             keys2.append(key)
+        #         #end if
+        #     #next
+        #     keys = keys2
 
-            # 各keyのデータが何番目にあるかを抽出する。
-            NumberOfKey = []
-            for j, key in enumerate(keys):
-                n1 = []
-                for k in range(len(data)):
-                    if key == data[k][0]:
-                        n1.append(k)
-                    #end if
-                #next
-                NumberOfKey.append(n1[0])
-            #next
+        #     # 各keyのデータが何番目にあるかを抽出する。
+        #     NumberOfKey = []
+        #     for j, key in enumerate(keys):
+        #         n1 = []
+        #         for k in range(len(data)):
+        #             if key == data[k][0]:
+        #                 n1.append(k)
+        #             #end if
+        #         #next
+        #         NumberOfKey.append(n1[0])
+        #     #next
 
-            beam2 = []
-            for j, data in enumerate(beam):
-                dic = {}
-                for k in range(len(data)):
-                    dic[keys[k]] = data[NumberOfKey[k]][1]
-                    #end if
-                #next
-                beam2.append(dic)
-            #next
-            ColumnData2.append(beam2)
+        #     beam2 = []
+        #     for j, data in enumerate(beam):
+        #         dic = {}
+        #         for k in range(len(data)):
+        #             dic[keys[k]] = data[NumberOfKey[k]][1]
+        #             #end if
+        #         #next
+        #         beam2.append(dic)
+        #     #next
+        #     ColumnData2.append(beam2)
             
-        #next
-        ColumnData = ColumnData2
+        # #next
+        # ColumnData = ColumnData2
         
         return ColumnData
     
@@ -2920,8 +3137,10 @@ class ChartReader:
             # end with
             
             if len(BeamData)>0 or len(ColumnData)>0:
-                filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
-                filename2 = filename2.replace("/in/","/out/")
+
+                filename2 = os.path.split(pdf_file)[1]         
+                filename2 = outdir+ "/"+ os.path.splitext(filename2)[0] + ".pickle"
+                # filename2 = filename2.replace("/in/","/out/")
                 self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
             #end if
 
@@ -2967,14 +3186,31 @@ if __name__ == '__main__':
     # pdffname.append("ミックスデータ.pdf")
     
     # pdffname.append("構造図テストデータ.pdf")
-    # pdffname.append("構造計算書テストデータ.pdf")
+    pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
-    pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
     # pdffname.append("02構造図.pdf")
     # pdffname.append("02一貫計算書（一部）.pdf")
 
+
+    # pdfname = "構造図テストデータ.pdf"
+    # pdfname = "構造計算書テストデータ.pdf"
+    
+    # pdfname = "(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf"
+    # pdfname = "(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf"
+    
+    # pdfname = "構造計算書の部材表.pdf"
+    # pdfname = "構造計算書の部材表（柱のみ）.pdf"
+    # pdfname = "構造計算書の基礎梁のみ.pdf"
+    
+    # pdfname = "01(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf"
+    # pdfname = "03sawarabi 京都六角 計算書 (事前用).pdf"
+    # pdfname = "03構造計算書（部材リストのみ）.pdf"
+    # pdfname = "構造計算書断面リスト1.pdf"
+    
+    # pdfname = "02一貫計算書（一部）.pdf"
 
     Folder1 = "PDF"
     Folder2 = "CSV"
