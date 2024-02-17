@@ -2970,10 +2970,10 @@ if __name__ == '__main__':
     # pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
-    pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
-    # pdffname.append("02構造図.pdf")
-    # pdffname.append("02一貫計算書（一部）.pdf")
+    pdffname.append("02構造図.pdf")
+    pdffname.append("02一貫計算書（一部）.pdf")
 
 
     Folder1 = "PDF"
@@ -2989,29 +2989,14 @@ if __name__ == '__main__':
 
             CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
 
-        #     filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
-        #     filename2 = Folder3 + "/"+ filename2
-
-        #     # CR.Save_MemberData_Picle(filename2, BeamData , ColumnData )
-
-        #     CR.Read_and_Save_Members_To_Pickle(filename,filename2)
-
-        #     # BeamData2 , ColumnData2 = CR.Load_MemberData_Picle(filename2)
-        #     a=0
-        # #end if
-            
-        # filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
-        # filename = Folder2 + "/"+ filename
-
-        # CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
 
 
-        filename = Folder1 + "/"+ pdf
+        # filename = Folder1 + "/"+ pdf
 
-        filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
-        filename2 = Folder3 + "/"+ filename2
+        # filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
+        # filename2 = Folder3 + "/"+ filename2
 
-        CR.Read_and_Save_Members_To_Pickle(filename,filename2)
+        # CR.Read_and_Save_Members_To_Pickle(filename,filename2)
 
     #next
     

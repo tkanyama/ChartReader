@@ -43,8 +43,10 @@ class multicheck:
     #       edpage      : 処理終了ページ
     #       bunkatu     : 並列処理の分割数
     #============================================================================
-    def __init__(self,filename, stpage=0, edpage=0, bunkatu=4):
-        self.filename = filename
+    def __init__(self,filename1, inputfolder1="PDF", outputfolder1="CSV", stpage=0, edpage=0, bunkatu=4):
+        self.filename = filename1
+        self.inputfolder = inputfolder1
+        self.outputfolder = outputfolder1
         self.bunkatu = bunkatu
         self.kinf =""
         self.version = ""
@@ -56,7 +58,7 @@ class multicheck:
         # PyPDF2のツールを使用してPDFのページ情報を読み取る。
         # PDFのページ数と各ページの用紙サイズを取得
         try:
-            with open(self.filename, "rb") as input:
+            with open(self.inputfolder + "/"+ self.filename, "rb") as input:
                 reader = PR2(input)
                 self.PageMax = len(reader.pages)     # PDFのページ数
             
@@ -120,7 +122,7 @@ class multicheck:
         p_file = fld + "/in/inputfile.pdf"
         # PDFファイルを回転して保存
         # def pdf_roll(p_file, p_angle):
-        file = pypdf.PdfReader(open(self.filename , 'rb'))
+        file = pypdf.PdfReader(open(self.inputfolder + "/" + self.filename , 'rb'))
         file_output = pypdf.PdfWriter()
         for page in file.pages: 
 
@@ -271,8 +273,8 @@ class multicheck:
         ColumnData = CR.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
 
         filename2 = os.path.splitext(self.filename)[0] + "_部材リスト" + ".csv"
-        filename2 = filename2.replace("PDF/" , "CSV/")
-        CR.Save_MemberData_Csv(filename2, BeamData,ColumnData)
+        # filename2 = filename2.replace("PDF/" , "CSV/")
+        CR.Save_MemberData_Csv(self.outputfolder + "/" + filename2, BeamData,ColumnData)
 
         # 結果ファイルを消去
         for file in files:
@@ -295,26 +297,41 @@ class multicheck:
 #==================================================================================
 
 if __name__ == '__main__':
-    
-    time_sta = time.time()  # 開始時刻の記録 (仮称)阿倍野区三明町2丁目マンション新築工事_構造図_部材リスト
 
-    stpage = 1
-    edpage = 0
-    # filename = "PDF/02一貫計算書（一部）.pdf"
-    # filename = "PDF/(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf"
-    filename = "PDF/(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf"
-    
-    # stpage = 2
-    # edpage = 84
-    # limit = 0.90
-    # filename = "構造計算書_新関西将棋会館.pdf"
-    
-    
-    MCT = multicheck(filename,stpage=stpage,edpage=edpage,bunkatu=4)
-    MCT.doCheck()
-    
+    time_sta = time.time()  # 開始時刻の記録
 
-    t1 = time.time() - time_sta
-    print("time = {} sec".format(t1))
+    CR = ChartReader()
+
+    Folder1 = "PDF"
+
+    pdffname =[]
+
+    # pdffname.append("ミックスデータ.pdf")
+    
+    # pdffname.append("構造図テストデータ.pdf")
+    # pdffname.append("構造計算書テストデータ.pdf")
+
+    # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
+    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    
+    pdffname.append("02構造図.pdf")
+    pdffname.append("02一貫計算書（一部）.pdf")
+
+
+    Folder1 = "PDF"
+    Folder2 = "CSV2"
+    Folder3 = "PICKLE"
+    for pdf in pdffname:
+        
+        MCT = multicheck(pdf,inputfolder1=Folder1,outputfolder1=Folder2,stpage=1,edpage=100,bunkatu=4)
+        MCT.doCheck()
+
+
+    #next
+    
+    time_end = time.time()  # 終了時刻の記録
+    print("処理時間 = {} sec".format(time_end - time_sta))
+    
+    
 
 #*********************************************************************************
