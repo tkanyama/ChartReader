@@ -826,22 +826,25 @@ class ChartReader:
             #next
         #end if
         
+
+
         if itemXmin == 10000:
             itemXmin = 72*2
         #end if                         getattr(self, "a")
         
-        self.登録外項目 = []
-        itemKey = []
-        for i, LineWord in enumerate(PageWordData):
-            word = LineWord[0]
-            text = word["text"]
-            x1 = word["x1"]
-            if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and x1<itemXmin:
-                # if not(text in itemKey):
-                self.登録外項目.append(word)
-                # itemKey.append(text)
-            #end if
-        #next
+        # self.登録外項目 = []
+        # itemKey = []
+        # for i, LineWord in enumerate(PageWordData):
+        #     word = LineWord[0]
+        #     text = word["text"]
+        #     x1 = word["x1"]
+        #     # if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and x1<itemXmin:
+        #     if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and text != "断面":
+        #         # if not(text in itemKey):
+        #         self.登録外項目.append(word)
+        #         # itemKey.append(text)
+        #     #end if
+        # #next
 
         # PDFが構造計算書の場合で「断面リスト」のヘッダーがない場合はそのページの処理を中止する。
         if len(self.構造計算書)>0:
@@ -869,166 +872,6 @@ class ChartReader:
                 #next
             #end if
         #next
-        
-        # フープ筋と材料については表の左側の項目名を追加（あば筋、帯筋等）
-        ItemName = ["フープ筋","材料"]
-        for Item in ItemName:
-            if len(getattr(self, Item))>0:
-                # flag = [0]*len(locals()[Item])
-                for j in range(len(getattr(self, Item))):
-                    # if flag[j] == 0:
-                    dataDic1 = getattr(self, Item)[j]
-                    row = dataDic1["row"]
-                    xm = dataDic1["xm"]
-                    left0 = dataDic1["x0"]
-                    right0 = dataDic1["x1"]
-                    top0 = dataDic1["y0"]
-                    bottom0 = dataDic1["y1"]
-                    d2 = []
-                    for d in self.項目名1:
-                        row1 = d["row"]
-                        left1 = d["x0"]
-                        right1 = d["x1"]
-                        top1 = d["y0"]
-                        bottom1 = d["y1"]
-                        if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0:
-                            flag = False
-                            if "筋" in d["text"]:
-                                flag = True
-                            elif "フープ" in d["text"]:
-                                flag = True
-                            elif "HOOP" in d["text"]:
-                                flag = True
-                            # elif "スターラップ" in d["text"]:
-                            #     flag = True
-                            # end if
-                            
-                            if flag:
-                                d2.append(d)
-                            #end if
-                        #end if
-                    #next
-                    # 項目1が無かった場合に登録外項目を探す
-                    # if len(d2) == 0:
-                    if len(self.登録外項目)>0:
-                        for d in self.登録外項目:
-                            row1 = d["row"]
-                            left1 = d["x0"]
-                            right1 = d["x1"]
-                            top1 = d["y0"]
-                            bottom1 = d["y1"]
-                            if right1<left0 and top1-self.ypitch*1.0 < top0 and bottom1+self.ypitch*1.0 > bottom0:
-                            
-                                d2.append(d)
-                                #end if
-                            #end if
-                        #next
-                    #end if
-                    #end if
-                            
-                    # 項目名の決定
-                    if len(d2) == 1:
-                        # 近くにある項目名がひとつの場合はそれを選択する
-                        
-                        getattr(self, Item)[j]["item"] = d2[0]["text"]
-                        
-                    elif len(d2) > 1:
-                        # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
-                        h1 = 10000
-                        im = -1
-                        for k, d1 in enumerate(d2):
-                            top1 = d1["y0"]
-                            if abs(top0 - top1)< h1:
-                                h1 = abs(top0 - top1)
-                                im = k
-                            #end if
-                        #next
-                        if im > -1 :
-                            
-                            getattr(self, Item)[j]["item"] = d2[im]["text"]
-                            
-                        #end if
-                    #end if
-                #next for j in range(len(getattr(self, Item))):
-            #end if
-        #next for Item in ItemName:
-        a=0
-
-        ItemName = ["主筋"]
-        for Item in ItemName:
-            if len(getattr(self, Item))>0:
-                # flag = [0]*len(getattr(self, Item))
-                for j in range(len(getattr(self, Item))):
-                    # if flag[j] == 0:
-                    dataDic1 = getattr(self, Item)[j]
-                    row = dataDic1["row"]
-                    xm = dataDic1["xm"]
-                    left0 = dataDic1["x0"]
-                    right0 = dataDic1["x1"]
-                    top0 = dataDic1["y0"]
-                    bottom0 = dataDic1["y1"]
-                    d2 = []
-                    for d in self.項目名1:
-                        row1 = d["row"]
-                        left1 = d["x0"]
-                        right1 = d["x1"]
-                        top1 = d["y0"]
-                        bottom1 = d["y1"]
-                        if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0:
-                            if "筋" in d["text"] :
-                                d2.append(d)
-                            #end if
-                        #end if
-                    #next
-                            
-                    # 項目名の決定
-                    if len(d2) == 1:
-                        if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
-                        # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
-                            getattr(self, Item)[j]["item"] = d2[0]["text"]
-                        else:
-                            getattr(self, Item)[j]["item"] = ""
-                        #end if
-                    elif len(d2) > 1:
-                        # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
-                        h1 = 10000
-                        im = -1
-                        for k, d1 in enumerate(d2):
-                            top1 = d1["y0"]
-                            if abs(top0 - top1)< h1:
-                                h1 = abs(top0 - top1)
-                                im = k
-                            #end if
-                        #next
-                        if im > -1 :
-                            if not("主" in d2[im]["text"] and "筋" in d2[im]["text"]) :
-                            # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[im]["text"]) == None :
-                                getattr(self, Item)[j]["item"] = d2[im]["text"]
-                            else:
-                                getattr(self, Item)[j]["item"] = ""
-                            #end if
-                            
-                        #end if
-                    #end if
-                #next for j in range(len(getattr(self, Item))):
-            #end if
-        #next for Item in ItemName:
-        
-
-        # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
-        floorXmin1= 10000.0
-        if len(self.梁符号)>0:
-            floorXmin1 = self.梁符号[0]["x0"]
-        #end if
-        floorXmin2 = 10000.0
-        if len(self.柱符号)>0:
-            floorXmin2 = self.柱符号[0]["x0"]
-        #end if
-        if floorXmin1 < floorXmin2:
-            floorXmin = floorXmin1 - 36
-        else:
-            floorXmin = floorXmin2 - 36
-        #end if
         
         # 最後列の断面寸法より下側にある階上項目（壁などの別の表に存在する場合など）は削除する
         if len(self.階上項目)>0:
@@ -1132,6 +975,329 @@ class ChartReader:
                 # self.階 = 階2
             #end if
         #end if
+
+        self.登録外項目 = []
+        itemKey = []
+        for i, LineWord in enumerate(PageWordData):
+            for word in LineWord:
+                # word = LineWord[0]
+                text = word["text"]
+                x1 = word["x1"]
+                # if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and x1<itemXmin:
+                if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and pCheck.isMember("項目名2",text) == False and text != "断面":
+                    # if not(text in itemKey):
+                    self.登録外項目.append(word)
+                    # itemKey.append(text)
+                #end if
+        #next
+        if len(self.登録外項目):
+            d1 = []
+            for d2 in self.登録外項目:
+                flag = False
+                xm0 = d2["xm"]
+                for d3 in self.階:
+                    xm1 = d3["xm"]
+                    if abs(xm0 - xm1) < self.itemPitch*2 and not( bool(re.search(r'\d', d2["text"]))):
+                        flag = True
+                        break
+                    #end if
+                #next
+                if flag :
+                    d1.append(d2)
+                #end if
+            #nexr
+            self.登録外項目 = d1
+        #end if
+
+        # フープ筋と材料については表の左側の項目名を追加（あば筋、帯筋等）
+        ItemName = ["フープ筋","材料"]
+        for Item in ItemName:
+            if len(getattr(self, Item))>0:
+                # flag = [0]*len(locals()[Item])
+                for j in range(len(getattr(self, Item))):
+                    # print(getattr(self, Item)["text"])
+                    # if flag[j] == 0:
+                    dataDic1 = getattr(self, Item)[j].copy()
+                    row = dataDic1["row"]
+                    xm = dataDic1["xm"]
+                    left0 = dataDic1["x0"]
+                    right0 = dataDic1["x1"]
+                    top0 = dataDic1["y0"]
+                    bottom0 = dataDic1["y1"]
+                    text = dataDic1["text"]
+                    # print(text)
+                    d2 = []
+                    for d in self.項目名1:
+                        row1 = d["row"]
+                        left1 = d["x0"]
+                        right1 = d["x1"]
+                        xm1 = d["xm"]
+                        top1 = d["y0"]
+                        bottom1 = d["y1"]
+                        if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0 :
+                        # if right1<left0 and row == row1 :
+                            flag = False
+                            if "筋" in d["text"]:
+                                flag = True
+                            elif "フープ" in d["text"]:
+                                flag = True
+                            elif "HOOP" in d["text"]:
+                                flag = True
+                            # elif "スターラップ" in d["text"]:
+                            #     flag = True
+                            # end if
+                            
+                            if flag:
+                                d2.append(d)
+                            #end if
+                        #end if
+                    #next
+                    # 項目1が無かった場合に登録外項目を探す
+                    # if len(d2) == 0:
+                    if len(self.登録外項目)>0:
+                        for d in self.登録外項目:
+                            row1 = d["row"]
+                            left1 = d["x0"]
+                            right1 = d["x1"]
+                            top1 = d["y0"]
+                            bottom1 = d["y1"]
+                            if right1<left0 and top1-self.ypitch*1.0 < top0 and bottom1+self.ypitch*1.0 > bottom0:
+                            # if right1<left0 and row==row1:
+                            
+                                d2.append(d)
+                                #end if
+                            #end if
+                        #next
+                    #end if
+                    #end if
+                            
+                    # 項目名の決定
+                    if len(d2) == 1:
+                        # 近くにある項目名がひとつの場合はそれを選択する
+                        
+                        getattr(self, Item)[j]["item"] = d2[0]["text"]
+                        
+                    elif len(d2) > 1:
+                        # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
+                        h1 = 10000
+                        # t1 = ""
+                        # for ddd in d2:
+                        #     t1 += ddd["text"]+","
+                        # print(t1)
+                        im = -1
+                        x00 = dataDic1["xm"]
+                        y00 = dataDic1["y0"]
+                        x10 = d2[0]["xm"]
+                        y10 = d2[0]["y0"]
+                        L1 = (x00-x10)**2 + (y00-y10)**2
+                        # L1 = (y00-y10)
+                        xi = 0
+                        for k  in range(1,len(d2)):
+                            x10 = d2[k]["xm"]
+                            y10 = d2[k]["y0"]
+                            L0 = (x00-x10)**2 + (y00-y10)**2
+                            # L0 = (y00-y10)
+                            if L0 < L1 :
+                                xi = k
+                            #next
+                        #next
+                        getattr(self, Item)[j]["item"] = d2[xi]["text"]
+                        # print(d2[xi]["text"])
+                        #     top1 = d1["y0"]
+                        #     if abs(top0 - top1)< h1:
+                        #         h1 = abs(top0 - top1)
+                        #         im = k
+                        #     #end if
+                        # #next
+                        # if im > -1 :
+                            
+                        #     getattr(self, Item)[j]["item"] = d2[im]["text"]
+                            
+                        # #end if
+                    #end if
+                #next for j in range(len(getattr(self, Item))):
+            #end if
+        #next for Item in ItemName:
+        a=0
+
+        ItemName = ["主筋"]
+        for Item in ItemName:
+            if len(getattr(self, Item))>0:
+                # flag = [0]*len(getattr(self, Item))
+                for j in range(len(getattr(self, Item))):
+                    # if flag[j] == 0:
+                    dataDic1 = getattr(self, Item)[j]
+                    row = dataDic1["row"]
+                    xm = dataDic1["xm"]
+                    left0 = dataDic1["x0"]
+                    right0 = dataDic1["x1"]
+                    top0 = dataDic1["y0"]
+                    bottom0 = dataDic1["y1"]
+                    d2 = []
+                    for d in self.項目名1:
+                        row1 = d["row"]
+                        left1 = d["x0"]
+                        right1 = d["x1"]
+                        top1 = d["y0"]
+                        bottom1 = d["y1"]
+                        if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0:
+                            if "筋" in d["text"] :
+                                d2.append(d)
+                            #end if
+                        #end if
+                    #next
+                            
+                    # 項目名の決定
+                    if len(d2) == 1:
+                        if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
+                        # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
+                            getattr(self, Item)[j]["item"] = d2[0]["text"]
+                        else:
+                            getattr(self, Item)[j]["item"] = ""
+                        #end if
+                    elif len(d2) > 1:
+                        # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
+                        h1 = 10000
+                        im = -1
+                        for k, d1 in enumerate(d2):
+                            top1 = d1["y0"]
+                            if abs(top0 - top1)< h1:
+                                h1 = abs(top0 - top1)
+                                im = k
+                            #end if
+                        #next
+                        if im > -1 :
+                            if not("主" in d2[im]["text"] and "筋" in d2[im]["text"]) :
+                            # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[im]["text"]) == None :
+                                getattr(self, Item)[j]["item"] = d2[im]["text"]
+                            else:
+                                getattr(self, Item)[j]["item"] = ""
+                            #end if
+                            
+                        #end if
+                    #end if
+                #next for j in range(len(getattr(self, Item))):
+            #end if
+        #next for Item in ItemName:
+        
+
+        # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
+        floorXmin1= 10000.0
+        if len(self.梁符号)>0:
+            floorXmin1 = self.梁符号[0]["x0"]
+        #end if
+        floorXmin2 = 10000.0
+        if len(self.柱符号)>0:
+            floorXmin2 = self.柱符号[0]["x0"]
+        #end if
+        if floorXmin1 < floorXmin2:
+            floorXmin = floorXmin1 - 36
+        else:
+            floorXmin = floorXmin2 - 36
+        #end if
+        
+        # # 最後列の断面寸法より下側にある階上項目（壁などの別の表に存在する場合など）は削除する
+        # if len(self.階上項目)>0:
+        #     y0 = self.断面寸法[len(self.断面寸法)-1]["y0"]
+        #     DAN = []
+        #     for d in self.階上項目:
+        #         if d["y0"]<y0:
+        #             DAN.append(d)
+        #         #end if
+        #     #next
+        #     self.階上項目 = DAN
+        # #end if
+
+        # if len(self.階) > 0:
+        
+        #     if len(self.階上項目)>0:
+        #         # 階上項目（階、符号など）がある場合
+        #         # 階のデータのうち、上端３行と下端３行およびxmが階上項目の直下にないデータは除外する
+        #         階2 = []
+        #         for d in self.階:
+        #             flag = False
+        #             xm = d["xm"]
+        #             if d["row"] > 3 and d["row"] < self.rowmax-3:
+        #                 for d1 in self.階上項目:
+        #                     x0 = d1["x0"]
+        #                     x1 = d1["x1"]
+        #                     if xm > x0 and xm < x1:
+        #                         flag = True
+        #                         break
+        #                     #end if
+        #                 #next
+        #             #next
+        #             if flag:
+        #                 階2.append(d)
+        #             #end if
+        #         #next
+        #         self.階 = 階2 
+        #     else:
+        #         階2 = []
+        #         for d in self.階:
+        #             flag = False
+        #             xm = d["xm"]
+        #             if d["row"] > 3 and d["row"] < self.rowmax-3:
+        #                 for d1 in self.項目名1:
+        #                     x0 = d1["xm"] - self.itemPitch*1.0
+        #                     x1 = d1["x1"] #+ self.itemPitch*0.5
+        #                     if xm > x0 and xm < x1:
+        #                         flag = True
+        #                         break
+        #                     #end if
+        #                 #next
+        #             #next
+        #             if flag:
+        #                 階2.append(d)
+        #             #end if
+        #         #next
+        #         self.階 = 階2 
+        #         # # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
+        #         # 階2 = []
+        #         # for d in self.階:
+        #         #     if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
+        #         #         階2.append(d)
+        #         #     #end if
+        #         # #next
+        #         # self.階 = 階2        
+        #     #end if
+                
+        #     # if len(self.階) > 0:
+        #     flag = [0] * len(self.階)
+        #     # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
+        #     階2 = []
+
+        #     for i in range(len(self.階)):
+        #         if flag[i] == 0:
+        #             row0 = self.階[i]["row"]
+        #             xm0 = self.階[i]["xm"]
+        #             d0 = self.階[i]
+        #             text0 = self.階[i]["text"]
+        #             for j in range(len(self.階)):
+        #                 if i != j and flag[j] == 0 :
+        #                     row = self.階[j]["row"]
+        #                     xm = self.階[j]["xm"]
+        #                     y1 = self.階[j]["y1"]
+        #                     text = self.階[j]["text"]
+        #                     d1 = self.階[j]
+        #                     if row - row0 < 6 and abs(xm - xm0) < 72:
+        #                         text0 += " , " + text
+        #                         d0["text"] = text0
+        #                         d0["y1"] = y1
+        #                         flag[j] = 1
+        #                     #end if
+        #                 #next
+        #             #next
+        #             階2.append(d0)
+        #             flag[i] = 1
+        #         #end if
+        #     #next
+        #     self.階 = 階2 
+        #         # a=0
+
+        #         # self.階 = 階2
+        #     #end if
+        # #end if
 
         # かぶりデータを行で並び替え
         L2 = []
@@ -2199,6 +2365,7 @@ class ChartReader:
                 
                 row1 = Section[i][0]["row"]
                 rmax = Section[i][0]["rmax"]
+                y01 = Section[i][0]["y0"]
                 
                 ItemName = ["同上","柱符号2","断面寸法","主筋","フープ筋","かぶり","材料"]
                 
@@ -2210,7 +2377,8 @@ class ChartReader:
                         for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
                             xm = d1["xm"]
                             row = d1["row"]
-                            if row >= row1-2 and row <= rmax and xm >= xmin and xm <= xmax:
+                            y00 = d1["y0"]
+                            if y00 > y01-self.ypitch*2 and row >= row1-1 and row <= rmax and xm >= xmin and xm <= xmax:
                                 # data.append(d1)
                                 dic = {}
                                 dic["kind"] = d1["kind"]
@@ -2294,7 +2462,7 @@ class ChartReader:
                                 xm = d1["xm"]
                                 row = d1["row"]
                                 # if row >= row1 and row <= rmax and xm < xm1 and abs(xm1-xm)<self.ColumnPitch*3.0:
-                                if row >= row1 and row <= rmax and xm < xm1 and xm < xm1:
+                                if row >= row1 and row <= rmax and xm < xm1 :
                                     # data.append(d1)
                                     dic = {}
                                     dic["kind"] = d1["kind"]
@@ -2325,14 +2493,33 @@ class ChartReader:
                                     dic["item"] = d1["item"]
 
                                     dic2.append(dic)
-                                    Section2[i][j].append(dic)
+                                    if Item == "階":
+                                        if abs(dic["xm"] - xm1) < self.ColumnPitch * 6:
+                                            Section2[i][j].append(dic)
+                                        #end if
+                                    else:
+                                        Section2[i][j].append(dic)
+                                    #end if
                                 #end if
-                                
-
                             #next
-                            if len(dic2)>1 :
-                                a=0
-                            # Section[i][j][Item] = data
+                                    
+                            # # 階データが複数ある場合は最も近いものを選択する。
+                            # if len(dic2)>1 :
+                            #     xL0 = abs(dic2[0]["xm"] - xm1)
+                            #     xn = 0
+                            #     for k in range(1,len(dic2)):
+                            #         xL1 = abs(dic2[k]["xm"] - xm1)
+                            #         if xL1 < xL0:
+                            #             xn = k
+                            #         #end if
+                            #     #next
+                            #     Section2[i][j].append(dic2[xn])
+                            # else:
+                            #     Section2[i][j].append(dic2[0])
+                            # #end if
+                            
+                            
+                            
                         #next
                     #next
                 
@@ -2573,7 +2760,7 @@ class ChartReader:
                                 n1 = ln[k][0]
                                 y1 = ln[k][1]
                                 xm1 = ln[k][2]
-                                if abs(y0-y1) < self.ypitch * 2.0 and abs(xm0 - xm1)<self.ColumnPitch/4 :
+                                if abs(y0-y1) < self.ypitch * 1.5 and abs(xm0 - xm1)<self.ColumnPitch/4 :
                                     ln2.append(ln[k][0])
                                     n0 = ln[k][0]
                                     y0 = ln[k][1]
@@ -3059,19 +3246,20 @@ if __name__ == '__main__':
     # pdffname.append("ミックスデータ.pdf")
     
     # pdffname.append("構造図テストデータ.pdf")
-    pdffname.append("構造計算書テストデータ.pdf")
+    # pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
     # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
-    # pdffname.append("02構造図.pdf")
-    # pdffname.append("02一貫計算書（一部）.pdf")
+    pdffname.append("02構造図.pdf")
+    pdffname.append("02一貫計算書（一部）.pdf")
 
 
     Folder1 = "PDF"
     Folder2 = "CSV"
     Folder3 = "PICKLE"
     for pdf in pdffname:
+        print("ファイ名={}".format(pdf))
         BeamData , ColumnData = CR.Read_Members_from_pdf(Folder1 + "/"+ pdf)
         
         if len(BeamData) > 0 or len(ColumnData) > 0:
