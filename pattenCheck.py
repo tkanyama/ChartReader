@@ -108,9 +108,6 @@ class PatternCheck:
         self.patternDic["同上"]=[[
                                     '\s*同\s*上\s*'
                                 ], 6]
-        self.patternDic["階上項目"]=[[
-                                    '\s*階\s*|\s*符\s*号\s*'
-                                ], 6]
         self.patternDic["断面リスト"]=[[
                                     '断面リスト'
                                 ], 10]
@@ -184,6 +181,9 @@ class PatternCheck:
                                 '|'+'(\s*\d{2}\s*)'+              # 20
                                 '|'+'(\s*R\s*)'                   # R
                                 ], 8]
+        self.patternDic["階上項目"]=[[
+                                    '\s*階\s*|\s*符\s*号\s*'
+                                ], 6]
         self.patternDic["日付"]=[[
                                 '(\s*\d{4}/\d{1,2}/\d{1,2}\s*)'  # 2024/01/31
                                 ], 12]
