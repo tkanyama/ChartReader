@@ -2995,12 +2995,14 @@ class ChartReader:
             # filename = os.path.splitext(pdfname)[0] + "_部材リスト" + ".csv"
 
             # 異字体の修正
-            filename = ja_cvu_normalizer.normalize(filename) 
+            # filename = ja_cvu_normalizer.normalize(filename) utf-8
 
             with open(filename, 'w', encoding='shift_jis') as f:
+            # with open(filename, 'w', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                title = "[ " + filename + " ]"
-                writer.writerow([title])
+                # title = "[ " + filename + " ]"
+                # # title = ja_cvu_normalizer.normalize(title) 
+                # writer.writerow([title])
                 writer.writerow("")
 
                 if len(BeamData)>0:
@@ -3244,15 +3246,19 @@ if __name__ == '__main__':
     pdffname =[]
 
     # pdffname.append("ミックスデータ.pdf")
+    # pdffname.append("構造図テストデータ2.pdf")
     
-    # pdffname.append("構造図テストデータ.pdf")
-    # pdffname.append("構造計算書テストデータ.pdf")
+    pdffname.append("構造図テストデータ.pdf")
+    pdffname.append("構造計算書テストデータ.pdf")
 
     # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
     # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
-    pdffname.append("02構造図.pdf")
-    pdffname.append("02一貫計算書（一部）.pdf")
+    # pdffname.append("02構造図.pdf")
+    # pdffname.append("02一貫計算書（一部）.pdf")
+
+    # pdffname.append("03sawarabi 京都六角 計算書 (事前用).pdf")
+    # pdffname.append("03sawarabi 京都六角 構造図(事前用).pdf")
 
 
     Folder1 = "PDF"
@@ -3263,6 +3269,10 @@ if __name__ == '__main__':
         BeamData , ColumnData = CR.Read_Members_from_pdf(Folder1 + "/"+ pdf)
         
         if len(BeamData) > 0 or len(ColumnData) > 0:
+
+            filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
+            filename2 = Folder3 + "/"+ filename2
+            CR.Save_MemberData_Picle(filename2,BeamData,ColumnData)
 
             filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
             filename = Folder2 + "/"+ filename
