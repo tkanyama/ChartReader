@@ -166,8 +166,13 @@ class ChartReader:
     #============================================================================
     def Read_Word_From_Page(self, page):
 
+        # 記号パターンから種類を特定するツールPatternCheckのインスタンスを作成
         pCheck = PatternCheck()
+
+
         # wordデータを高さy1の順に並び替え
+        # ページの座標系はＸ方向は左から右方向が正、Ｙ方向は上から下方向が正
+
         page_word = []
         Lheight = []
         for obj in page.extract_words():
@@ -180,6 +185,7 @@ class ChartReader:
             Lheight.append(y1)
         #end if
 
+        # ページ中の全ての単語を高さの順位並べ替える。
         VArray = np.array(Lheight)      # リストをNumpyの配列に変換
         index1 = np.argsort(VArray)    # 縦の線をHeightの値で降順にソートするインデックスを取得
         page_word2 = []    
@@ -187,10 +193,11 @@ class ChartReader:
             page_word2.append(page_word[index1[j]])
         #next
         page_word = page_word2
+
+
+        # 高さy1の差が0.1ポイント（0.035mm)未満のwordを同じ行のリストにまとめる
         row = 1
         line_word = []
-
-        # 同じy1のwordを同じ行のリストにまとめる
         page_lines = []
         Lheight0 = page_word[0]["y1"]
         page_word[0]["row"] = row
@@ -212,12 +219,10 @@ class ChartReader:
             page_lines.append(line_word)
         #end if
         
-        # 高さの差が1ポイント以内の行を同じ行にまとめる
+        # さらに高さの差が1ポイント以内の行を同じ行にまとめる
         page_lines2 = []
-        rowi = 0
-        
+        rowi = 0        
         ln = len(page_lines)
-        
         i = 0
         AddFlag = []
         # print()
@@ -268,7 +273,7 @@ class ChartReader:
         page_lines = page_lines2
 
 
-        # 同じ行のwordをx0の順に並べ替える。
+        # 合成した各行のwordをx0の順に並べ替える。
         page_lines2 = []
         for rowi, line in enumerate(page_lines):
             line2 = []
@@ -286,17 +291,16 @@ class ChartReader:
         #next
         page_lines = page_lines2
 
-#============================================================================1
-        
+
         # 各行の近接するwordをひとつのワードに統合する。
-        # 結合条件は 文字ピッチ×spaceN 以内の距離
-        # spaceN = 1.0
+        # 結合条件は 単語間の距離が文字ピッチのc(=1.5)倍以内であれば結合する。
+        c = 1.5    
+
         page_lines3 = []
 
         """
         デバッグプリントするときはここでブレークポイント
         """
-
         for line in page_lines:
             if DbPrint:
                 name = input("enter to Continue: ")
@@ -308,8 +312,6 @@ class ChartReader:
                     t1 += "["+L1["text"]+"] "
                 print(t1,len(line))
             #==========================
-
-            c = 1.5    # 単語間の距離が文字ピッチの1.5倍以内であれば結合する。
 
             if len(line)>1 :
                 line2 = []
@@ -334,7 +336,7 @@ class ChartReader:
 
                     addflag = False
 
-                    # 単語間の距離が文字ピッチの1.5倍以内であれば結合する。
+                    # 単語間の高さの差が1ポイント以内で、かつ、右端と左端の距離が文字幅の1.5倍以内であれば結合する。
                     if abs(y00 - y10)<1.0:
                         if (x10 - x01) <= pitch * c:
                             addflag = True
@@ -364,7 +366,8 @@ class ChartReader:
                     t2 += "["+L1["text"]+"] "
                 print(t2,len(line2))
 
-            # 2つの単語を結合したものが登録部材名に合致する場合は結合する。
+            # 距離が離れていて2つの単語を結合したものが登録部材名に合致する場合は結合する。
+                
             if len(line2)>1 :
                 line3 = []
                 # word0 = {}
@@ -590,6 +593,8 @@ class ChartReader:
             wordsByKind[keyname] = []
         #next
 
+        # 各行のすべての単語のパターンチェックを行い、分類ごとの記号リストwordsByKindを作成する。
+            
         self.ypitch = 0
         for i, LineWord in enumerate(PageWordData):
             # line = []
@@ -618,14 +623,20 @@ class ChartReader:
             # #end if
         #next
 
+        # ページの最終行を抽出
         self.rowmax = len(PageWordData)
+
+        # データリストwordsByKindから各記号のリストを抽出する。
 
         self.梁符号1 = wordsByKind["梁符号1"]
         self.梁符号2 = wordsByKind["梁符号2"]
+
+        # 梁符号1がある場合は梁符号1を梁符号とする。
         self.梁符号 = []
         if len(self.梁符号1) > 0:
             self.梁符号 = self.梁符号1
         else:
+            # 梁符号1が無く、梁符号2はある場合は梁符号2を梁符号とする。
             if len(self.梁符号2) > 0:
                 flag = False
                 for d in self.梁符号2:
@@ -639,6 +650,7 @@ class ChartReader:
                 #end if
             #end if
         #end if
+        #記号の種類
         for i in range(len(self.梁符号)):
             self.梁符号[i]["kind"] = "梁符号"
         #next
@@ -666,6 +678,7 @@ class ChartReader:
         self.断面リスト = wordsByKind["断面リスト"]
         self.階上項目 = wordsByKind["階上項目"]
 
+        # 同じ行にある柱符号から表のコラム間隔self.ColumnPitchを抽出する。
         self.ColumnPitch = 0
         if len(self.柱符号)>0:
             itemXmin = 10000
@@ -686,6 +699,8 @@ class ChartReader:
                 #end if
             #next
         #end if
+                
+        # 同じ行にある梁符号から表のコラム間隔self.beamPitchを抽出する。
         self.beamPitch = 0
         if len(self.梁符号)>0:
             itemXmin = 10000
@@ -707,6 +722,7 @@ class ChartReader:
             #next
         #end if
                 
+        # self.beamPitchまたはself.ColumnPitchから表のコラム間隔self.itemPitchを決定する。
         self.itemPitch = 0
         if self.beamPitch>0:
             self.itemPitch = self.beamPitch
@@ -719,6 +735,7 @@ class ChartReader:
             self.itemPitch = 72
         #end if
 
+        # すべての梁符号からx0およびy0の最小値を抽出する。
         itemXmin = 10000
         itemYmin = 10000
         if len(self.梁符号)>0:
@@ -745,7 +762,7 @@ class ChartReader:
                 #next
                 self.梁断面位置 = self.梁断面位置2
                 
-                
+                # 同じ行にある梁断面位置から表のコラム間隔self.beamPitchを抽出する。
                 self.beamPitch = 0
                 xm1 = self.梁断面位置[0]["xm"]
                 x0 = self.梁断面位置[0]["x0"]
@@ -773,6 +790,7 @@ class ChartReader:
             
 
         if len(self.梁断面位置):
+            # 文字の異字体の変換を行う。（面）
             self.梁断面位置2 = []
             for data in self.梁断面位置:
                 data["text"] = ja_cvu_normalizer.normalize(data["text"]) 
@@ -846,7 +864,7 @@ class ChartReader:
         #     #end if
         # #next
 
-        # PDFが構造計算書の場合で「断面リスト」のヘッダーがない場合はそのページの処理を中止する。
+        # PDFが構造計算書の場合で「断面リスト」の単語がない場合はそのページの処理を中止する。
         if len(self.構造計算書)>0:
             if len(self.断面リスト)==0 :
                 # BeamData = []
@@ -862,7 +880,11 @@ class ChartReader:
             return False
         #end if
 
-        # 各部材の項目名Itemに""を追加
+        #======================================
+        # 中止条件がない場合は以下の処理に進む。
+        #======================================
+
+        # 各部材の副項目名Itemに""を追加
         ItemName = ["同上","梁符号","梁断面位置","梁符号2","主筋","階","断面寸法","かぶり",
                     "柱符号","柱符号2","腹筋","フープ筋","材料","片持梁符号"]
         for Item in ItemName:
@@ -884,7 +906,11 @@ class ChartReader:
             #next
             self.階上項目 = DAN
         #end if
-
+            
+        
+        #=============================================================
+        # 階データには無駄なデータが多数含まれるため、以下の処理でふるい落とす。
+        
         if len(self.階) > 0:
         
             if len(self.階上項目)>0:
@@ -910,6 +936,8 @@ class ChartReader:
                 #next
                 self.階 = 階2 
             else:
+                # 階上項目（階、符号など）がない場合
+                # 項目名1（主筋など）の左端からコラムピッチ以内もののみ抽出
                 階2 = []
                 for d in self.階:
                     flag = False
@@ -929,19 +957,16 @@ class ChartReader:
                     #end if
                 #next
                 self.階 = 階2 
-                # # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
-                # 階2 = []
-                # for d in self.階:
-                #     if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
-                #         階2.append(d)
-                #     #end if
-                # #next
-                # self.階 = 階2        
+                    
             #end if
                 
-            # if len(self.階) > 0:
             flag = [0] * len(self.階)
-            # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
+
+            # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータにまとめる
+            #  9FL
+            #   〜      ->  9FL , 7FL
+            #  7FL
+
             階2 = []
 
             for i in range(len(self.階)):
@@ -970,26 +995,29 @@ class ChartReader:
                 #end if
             #next
             self.階 = 階2 
-                # a=0
-
-                # self.階 = 階2
-            #end if
         #end if
 
+        # 登録外項目も多数抽出されるので、数字だけのもの、1文字のもの、項目名1または項目名2に該当するもの、"断面"を含むものは除外する。
         self.登録外項目 = []
         itemKey = []
         for i, LineWord in enumerate(PageWordData):
             for word in LineWord:
-                # word = LineWord[0]
                 text = word["text"]
                 x1 = word["x1"]
-                # if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and x1<itemXmin:
-                if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and pCheck.isMember("項目名2",text) == False and text != "断面":
-                    # if not(text in itemKey):
+                flag = True
+                flag = flag and not(text.isnumeric()) 
+                flag = flag and len(text)>= 2 
+                flag = flag and (pCheck.isMember("項目名1",text) == False )
+                flag = flag and (pCheck.isMember("項目名2",text) == False)
+                flag = flag and not("断面" in text)
+                
+                # if not(text.isnumeric()) and len(text)>= 2 and pCheck.isMember("項目名1",text) == False and pCheck.isMember("項目名2",text) == False and text != "断面":
+                if flag:
                     self.登録外項目.append(word)
-                    # itemKey.append(text)
                 #end if
         #next
+        
+        # 登録外項目のうち階データからコラムピッチの2倍以上離れているものおよび数値を含むもの（FC-33等）を除外
         if len(self.登録外項目):
             d1 = []
             for d2 in self.登録外項目:
@@ -1009,7 +1037,7 @@ class ChartReader:
             self.登録外項目 = d1
         #end if
 
-        # フープ筋と材料については表の左側の項目名を追加（あば筋、帯筋等）
+        # フープ筋と材料については表の左側の副項目名を追加（あば筋、帯筋等）
         ItemName = ["フープ筋","材料"]
         for Item in ItemName:
             if len(getattr(self, Item))>0:
@@ -1034,15 +1062,19 @@ class ChartReader:
                         xm1 = d["xm"]
                         top1 = d["y0"]
                         bottom1 = d["y1"]
+
+                        # フープ筋より左側にあり、かつ、高さの差が行ピッチの2倍以内にあるものを抽出
+
                         if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0 :
-                        # if right1<left0 and row == row1 :
+
+                            # かつ、以下の語を含むもののみ抽出
                             flag = False
-                            if "筋" in d["text"]:
+                            if "筋" in d["text"]:   # 主筋、あばら筋、帯筋、上端筋 など
                                 flag = True
                             elif "フープ" in d["text"]:
                                 flag = True
-                            elif "HOOP" in d["text"]:
-                                flag = True
+                            # elif "HOOP" in d["text"]:
+                            #     flag = True
                             # elif "スターラップ" in d["text"]:
                             #     flag = True
                             # end if
@@ -1052,8 +1084,8 @@ class ChartReader:
                             #end if
                         #end if
                     #next
-                    # 項目1が無かった場合に登録外項目を探す
-                    # if len(d2) == 0:
+                    
+                    # さらに登録外項目を探す
                     if len(self.登録外項目)>0:
                         for d in self.登録外項目:
                             row1 = d["row"]
@@ -1061,14 +1093,15 @@ class ChartReader:
                             right1 = d["x1"]
                             top1 = d["y0"]
                             bottom1 = d["y1"]
+
+                            # フープ筋より左側にあり、かつ、高さの差が行ピッチの1倍以内にあるものを抽出
+
                             if right1<left0 and top1-self.ypitch*1.0 < top0 and bottom1+self.ypitch*1.0 > bottom0:
-                            # if right1<left0 and row==row1:
                             
                                 d2.append(d)
                                 #end if
                             #end if
                         #next
-                    #end if
                     #end if
                             
                     # 項目名の決定
@@ -1078,12 +1111,8 @@ class ChartReader:
                         getattr(self, Item)[j]["item"] = d2[0]["text"]
                         
                     elif len(d2) > 1:
-                        # 近くにある項目名が複数有るときはもっとの高低差が小さいものを選択する
-                        h1 = 10000
-                        # t1 = ""
-                        # for ddd in d2:
-                        #     t1 += ddd["text"]+","
-                        # print(t1)
+                        # 近くにある項目名が複数有るときは直線距離が最も小さいものを選択する
+                        
                         im = -1
                         x00 = dataDic1["xm"]
                         y00 = dataDic1["y0"]
@@ -1102,24 +1131,13 @@ class ChartReader:
                             #next
                         #next
                         getattr(self, Item)[j]["item"] = d2[xi]["text"]
-                        # print(d2[xi]["text"])
-                        #     top1 = d1["y0"]
-                        #     if abs(top0 - top1)< h1:
-                        #         h1 = abs(top0 - top1)
-                        #         im = k
-                        #     #end if
-                        # #next
-                        # if im > -1 :
-                            
-                        #     getattr(self, Item)[j]["item"] = d2[im]["text"]
-                            
-                        # #end if
+                        
                     #end if
                 #next for j in range(len(getattr(self, Item))):
             #end if
         #next for Item in ItemName:
-        a=0
-
+        
+        # 主筋についても表の左側の副項目名があれば追加（帯筋等）
         ItemName = ["主筋"]
         for Item in ItemName:
             if len(getattr(self, Item))>0:
@@ -1140,6 +1158,9 @@ class ChartReader:
                         right1 = d["x1"]
                         top1 = d["y0"]
                         bottom1 = d["y1"]
+
+                        # 主筋より左側にあり、かつ、高さの差が行ピッチの2倍以内にあるものを抽出
+
                         if right1<left0 and top1-self.ypitch*2.0 < top0 and bottom1+self.ypitch*2.0 > bottom0:
                             if "筋" in d["text"] :
                                 d2.append(d)
@@ -1150,9 +1171,10 @@ class ChartReader:
                     # 項目名の決定
                     if len(d2) == 1:
                         if not("主" in d2[0]["text"] and "筋" in d2[0]["text"]):
-                        # if re.fullmatch("\s*主\s*\筋\s*\S*\s*",d2[0]["text"]) == None :
+                            #
                             getattr(self, Item)[j]["item"] = d2[0]["text"]
                         else:
+                            # 副項目が"主筋"の場合は追加しない
                             getattr(self, Item)[j]["item"] = ""
                         #end if
                     elif len(d2) > 1:
@@ -1180,124 +1202,6 @@ class ChartReader:
             #end if
         #next for Item in ItemName:
         
-
-        # 梁符号または柱符号の最初のデータのx0を階データの閾値とする
-        floorXmin1= 10000.0
-        if len(self.梁符号)>0:
-            floorXmin1 = self.梁符号[0]["x0"]
-        #end if
-        floorXmin2 = 10000.0
-        if len(self.柱符号)>0:
-            floorXmin2 = self.柱符号[0]["x0"]
-        #end if
-        if floorXmin1 < floorXmin2:
-            floorXmin = floorXmin1 - 36
-        else:
-            floorXmin = floorXmin2 - 36
-        #end if
-        
-        # # 最後列の断面寸法より下側にある階上項目（壁などの別の表に存在する場合など）は削除する
-        # if len(self.階上項目)>0:
-        #     y0 = self.断面寸法[len(self.断面寸法)-1]["y0"]
-        #     DAN = []
-        #     for d in self.階上項目:
-        #         if d["y0"]<y0:
-        #             DAN.append(d)
-        #         #end if
-        #     #next
-        #     self.階上項目 = DAN
-        # #end if
-
-        # if len(self.階) > 0:
-        
-        #     if len(self.階上項目)>0:
-        #         # 階上項目（階、符号など）がある場合
-        #         # 階のデータのうち、上端３行と下端３行およびxmが階上項目の直下にないデータは除外する
-        #         階2 = []
-        #         for d in self.階:
-        #             flag = False
-        #             xm = d["xm"]
-        #             if d["row"] > 3 and d["row"] < self.rowmax-3:
-        #                 for d1 in self.階上項目:
-        #                     x0 = d1["x0"]
-        #                     x1 = d1["x1"]
-        #                     if xm > x0 and xm < x1:
-        #                         flag = True
-        #                         break
-        #                     #end if
-        #                 #next
-        #             #next
-        #             if flag:
-        #                 階2.append(d)
-        #             #end if
-        #         #next
-        #         self.階 = 階2 
-        #     else:
-        #         階2 = []
-        #         for d in self.階:
-        #             flag = False
-        #             xm = d["xm"]
-        #             if d["row"] > 3 and d["row"] < self.rowmax-3:
-        #                 for d1 in self.項目名1:
-        #                     x0 = d1["xm"] - self.itemPitch*1.0
-        #                     x1 = d1["x1"] #+ self.itemPitch*0.5
-        #                     if xm > x0 and xm < x1:
-        #                         flag = True
-        #                         break
-        #                     #end if
-        #                 #next
-        #             #next
-        #             if flag:
-        #                 階2.append(d)
-        #             #end if
-        #         #next
-        #         self.階 = 階2 
-        #         # # 階のデータのうち、上端３行と下端３行およびfloorXminより右側ののデータは除外する
-        #         # 階2 = []
-        #         # for d in self.階:
-        #         #     if d["row"] > 3 and d["row"] < self.rowmax-3 and d["x1"] < floorXmin:
-        #         #         階2.append(d)
-        #         #     #end if
-        #         # #next
-        #         # self.階 = 階2        
-        #     #end if
-                
-        #     # if len(self.階) > 0:
-        #     flag = [0] * len(self.階)
-        #     # 階データのうち、上下２段（行の差が５行以内）で表記されているものは１つのデータのまとめる
-        #     階2 = []
-
-        #     for i in range(len(self.階)):
-        #         if flag[i] == 0:
-        #             row0 = self.階[i]["row"]
-        #             xm0 = self.階[i]["xm"]
-        #             d0 = self.階[i]
-        #             text0 = self.階[i]["text"]
-        #             for j in range(len(self.階)):
-        #                 if i != j and flag[j] == 0 :
-        #                     row = self.階[j]["row"]
-        #                     xm = self.階[j]["xm"]
-        #                     y1 = self.階[j]["y1"]
-        #                     text = self.階[j]["text"]
-        #                     d1 = self.階[j]
-        #                     if row - row0 < 6 and abs(xm - xm0) < 72:
-        #                         text0 += " , " + text
-        #                         d0["text"] = text0
-        #                         d0["y1"] = y1
-        #                         flag[j] = 1
-        #                     #end if
-        #                 #next
-        #             #next
-        #             階2.append(d0)
-        #             flag[i] = 1
-        #         #end if
-        #     #next
-        #     self.階 = 階2 
-        #         # a=0
-
-        #         # self.階 = 階2
-        #     #end if
-        # #end if
 
         # かぶりデータを行で並び替え
         L2 = []
@@ -3092,135 +2996,135 @@ class ChartReader:
     #  表紙以外のページのチェック（外部から読み出す関数名）
     #============================================================================
 
-    def PageCheck(self,filename, outdir, psn, PageNumber,ProcessN):
-        global flag1, fname, dir1, dir2, dir3, dir4, dir5, folderName, paraFileName
-        global ErrorFlag, ErrorMessage
+    # def PageCheck(self,filename, outdir, psn, PageNumber,ProcessN):
+    #     global flag1, fname, dir1, dir2, dir3, dir4, dir5, folderName, paraFileName
+    #     global ErrorFlag, ErrorMessage
         
-        if filename =="" :
-            return False
-        #end if
-        print(filename)
-        pdf_file = filename
+    #     if filename =="" :
+    #         return False
+    #     #end if
+    #     print(filename)
+    #     pdf_file = filename
 
-        # PyPDF2のツールを使用してPDFのページ情報を読み取る。
-        # PDFのページ数と各ページの用紙サイズを取得
-        PaperSize = []
-        self.PaperRotate = []                
-        try:
-            with open(pdf_file, "rb") as input:
-                reader = PR2(input)
-                PageMax = len(reader.pages)     # PDFのページ数
-                # PaperSize = []
-                # PaperRotate = []
-                for page in reader.pages:       # 各ページの用紙サイズの読取り
-                    p_size = page.mediabox
-                    rotate = page.get('/Rotate', 0)
-                    self.PaperRotate.append(rotate)
-                    page_xmin = float(page.mediabox.lower_left[0])
-                    page_ymin = float(page.mediabox.lower_left[1])
-                    page_xmax = float(page.mediabox.upper_right[0])
-                    page_ymax = float(page.mediabox.upper_right[1])
-                    PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
-            #end with
-        except OSError as e:
-            print(e)
-            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-            return False
-        except:
-            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-            return False
-        #end try
+    #     # PyPDF2のツールを使用してPDFのページ情報を読み取る。
+    #     # PDFのページ数と各ページの用紙サイズを取得
+    #     PaperSize = []
+    #     self.PaperRotate = []                
+    #     try:
+    #         with open(pdf_file, "rb") as input:
+    #             reader = PR2(input)
+    #             PageMax = len(reader.pages)     # PDFのページ数
+    #             # PaperSize = []
+    #             # PaperRotate = []
+    #             for page in reader.pages:       # 各ページの用紙サイズの読取り
+    #                 p_size = page.mediabox
+    #                 rotate = page.get('/Rotate', 0)
+    #                 self.PaperRotate.append(rotate)
+    #                 page_xmin = float(page.mediabox.lower_left[0])
+    #                 page_ymin = float(page.mediabox.lower_left[1])
+    #                 page_xmax = float(page.mediabox.upper_right[0])
+    #                 page_ymax = float(page.mediabox.upper_right[1])
+    #                 PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
+    #         #end with
+    #     except OSError as e:
+    #         print(e)
+    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+    #         return False
+    #     except:
+    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+    #         return False
+    #     #end try
         
-        #=============================================================
-        # startpage = 1
-        # endpage = PageMax
+    #     #=============================================================
+    #     # startpage = 1
+    #     # endpage = PageMax
         
-        # # PDFMinerのツールの準備
-        # resourceManager = PDFResourceManager()
-        # # PDFから単語を取得するためのデバイス
-        # device = PDFPageAggregator(resourceManager, laparams=LAParams())
-        # # PDFから１文字ずつを取得するためのデバイス
-        # device2 = PDFPageAggregator(resourceManager)
+    #     # # PDFMinerのツールの準備
+    #     # resourceManager = PDFResourceManager()
+    #     # # PDFから単語を取得するためのデバイス
+    #     # device = PDFPageAggregator(resourceManager, laparams=LAParams())
+    #     # # PDFから１文字ずつを取得するためのデバイス
+    #     # device2 = PDFPageAggregator(resourceManager)
 
-        pageResultData = []
-        pageNo = []
-        BeamData = []
-        ColumnData = []
-        try:
+    #     pageResultData = []
+    #     pageNo = []
+    #     BeamData = []
+    #     ColumnData = []
+    #     try:
             
-            with pdfplumber.open(pdf_file) as pdf:
-                # interpreter = PDFPageInterpreter(resourceManager, device)
-                # interpreter2 = PDFPageInterpreter(resourceManager, device2)
+    #         with pdfplumber.open(pdf_file) as pdf:
+    #             # interpreter = PDFPageInterpreter(resourceManager, device)
+    #             # interpreter2 = PDFPageInterpreter(resourceManager, device2)
 
-                PageData = []
-                for page in pdf.pages:
-                # for page in PDFPage.get_pages(PDF):
-                    PageData.append(page)
-                #next
-                pageI = 0
-                # pageI2 = 0
-                # PageN2 = len(PageNumber)
-                flagPage = True
+    #             PageData = []
+    #             for page in pdf.pages:
+    #             # for page in PDFPage.get_pages(PDF):
+    #                 PageData.append(page)
+    #             #next
+    #             pageI = 0
+    #             # pageI2 = 0
+    #             # PageN2 = len(PageNumber)
+    #             flagPage = True
 
-                while flagPage:
-                    for i,p in enumerate(PageNumber):
-                        flagPage = False
-                        if p > 0:
-                            pageI = i + 1
-                            PageNumber[i] = 0
-                            flagPage = True
-                            page = PageData[i]
-                            ProcessN[psn] += 1
-                            break
-                        #end if
-                    #next
-                    if flagPage == False:
-                        break
-                    #end if
+    #             while flagPage:
+    #                 for i,p in enumerate(PageNumber):
+    #                     flagPage = False
+    #                     if p > 0:
+    #                         pageI = i + 1
+    #                         PageNumber[i] = 0
+    #                         flagPage = True
+    #                         page = PageData[i]
+    #                         ProcessN[psn] += 1
+    #                         break
+    #                     #end if
+    #                 #next
+    #                 if flagPage == False:
+    #                     break
+    #                 #end if
 
-                    # outfile = outdir + "/" + "outfile{:0=4}.pdf".format(pageI)
-                    ResultData = []
-                    print("ps={}:page={}:".format(psn,pageI), end="")
+    #                 # outfile = outdir + "/" + "outfile{:0=4}.pdf".format(pageI)
+    #                 ResultData = []
+    #                 print("ps={}:page={}:".format(psn,pageI), end="")
 
-                    BeamData1, ColumnData1 = self.ElementFinder(page)
+    #                 BeamData1, ColumnData1 = self.ElementFinder(page)
 
-                    # print(len(BeamData1),len(ColumnData1))
+    #                 # print(len(BeamData1),len(ColumnData1))
 
-                    if len(BeamData1) > 0:
-                            BeamData += BeamData1
-                    #end if
-                    if len(ColumnData1) > 0:
-                        ColumnData += ColumnData1
-                    #end if
+    #                 if len(BeamData1) > 0:
+    #                         BeamData += BeamData1
+    #                 #end if
+    #                 if len(ColumnData1) > 0:
+    #                     ColumnData += ColumnData1
+    #                 #end if
 
-                #next
+    #             #next
 
-                # fp.close()
-                folderName = ""
-                # os.remove("./kind.txt")
-            # end with
+    #             # fp.close()
+    #             folderName = ""
+    #             # os.remove("./kind.txt")
+    #         # end with
             
-            if len(BeamData)>0 or len(ColumnData)>0:
-                filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
-                filename2 = filename2.replace("/in/","/out/")
-                self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
-            #end if
+    #         if len(BeamData)>0 or len(ColumnData)>0:
+    #             filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
+    #             filename2 = filename2.replace("/in/","/out/")
+    #             self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
+    #         #end if
 
-        except OSError as e:
-            print(e)
-            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-            # print("******1")
-            return False
-        except:
-            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-            # print("***********2")
-            return False
-        # end try
+    #     except OSError as e:
+    #         print(e)
+    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+    #         # print("******1")
+    #         return False
+    #     except:
+    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+    #         # print("***********2")
+    #         return False
+    #     # end try
 
-        # すべての処理がエラーなく終了したのでTrueを返す。
-        return True
+    #     # すべての処理がエラーなく終了したのでTrueを返す。
+    #     return True
 
-    #end def    
+    # #end def    
     #*********************************************************************************
 
 
