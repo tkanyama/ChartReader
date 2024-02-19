@@ -37,12 +37,12 @@ class PatternCheck:
         #                         ], 25]
         # self.patternDic["断面寸法4"]=[[
         #                             '(\s*\d+\s*(×|x|ｘ)\s*)|(\s*\d+,\d+\s*(×|x|ｘ)\s*)'
-        #                         ], 25]
+        #                         ], 25](\\s*G\\d{1,2}\\D*\\s*)|\\s*G\\d{1,2}\\D*\\s*\\,\\s*G\\d{1,2}\\D*\\s*
         self.patternDic["梁符号1"]=[[
                                     '(\s*G\d{1,2}\D*\s*)'   # G1 G20 G1A G20A
-                                # '|'+'(\s*FG\d{1,2}\D*\s*)'          # FG1 FG10 FG1A FG10A
-                                # '|'+'(\s*FCG\d{1,2}\D*\s*)'          # FCG1 FCG10 FCG1A FCG10A
-                                ] , 8 ] # 文字数制限
+                                '|'+'\s*G\d{1,2}\D*\s*(,|、|，)\s*G\d{1,2}\D*\s*' # G2, G2A
+                                # # '|'+'(\s*FCG\d{1,2}\D*\s*)'          # FCG1 FCG10 FCG1A FCG10A
+                                ] , 10 ] # 文字数制限
         self.patternDic["小梁符号"]=[[
                                     '(\s*B\d{1,2}\D*\s*)' +         # B1 B20 B1A B20A
                                 '|'+'(\s*(C|F)B\d{1,2}\D*\s*)'        # CB1 CB10 CB1A CB10A FB1 FB10 FB1A FB10A
@@ -122,7 +122,8 @@ class PatternCheck:
                                     # '|'+'(\s*材料\s*)' # 主筋
                                 ] ,5]
         self.patternDic["柱符号"]=[[
-                                    '(\s*C\d{1,2}\s*)'       # C1 C10
+                                    '(\s*C\d{1,2}\s*)' +     # C1 C10
+                                '|'+  '(\s*C\d{1,2}\s*)(,|、|，)(\s*C\d{1,2}\s*)'       # C1, C10
                                 # '|'+'(\s*P\d{1,2}\s*)'        # P1 P10
                                 ], 6]
         self.patternDic["柱符号2"]=[[
@@ -159,8 +160,8 @@ class PatternCheck:
                                 ], 12]
         
         self.patternDic["腹筋"]=[[
-                                '(\s*\d{1,2}-D13\s*)'+                 # 2-D13
-                                '|'+'(\s*\d{1,2}-D10\s*)'                    # 2-D10
+                                '(\s*\d{1,2}-D10\s*)'                 # 2-D10
+                                # '|'+'(\s*\d{1,2}-D10\s*)'                    # 2-D10
                                 ], 16]
         
         self.patternDic["主筋"]=[[
@@ -212,7 +213,8 @@ class PatternCheck:
             if len(word) <= n:
                 for p in p1:
                     # if re.match(p,word):
-                    if re.fullmatch(p,word):
+                    # print(re.fullmatch(p,word))
+                    if re.fullmatch(p,word) != None:
                         if key == "階" and word.isnumeric():
                             if int(word) >= 30 :
                                 return "かぶり"
@@ -224,7 +226,8 @@ class PatternCheck:
                                 #end if
                             #end if
                         elif key == "主筋" :
-                            if "D13" in word or "D10" in word:
+                            # if "D13" in word or "D10" in word:
+                            if "D10" in word:
                                 return "腹筋"
                             else:
                                 return key
@@ -316,6 +319,7 @@ if __name__ == '__main__':
     data1.append("G1")
     data1.append("G20")
     data1.append("G1A")
+    data1.append("G2, G2A")
     data1.append("G20A")
     data1.append(" G1A")
     data1.append(" G20A ")

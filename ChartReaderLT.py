@@ -587,7 +587,7 @@ class ChartReader:
         # 異体字正規化モジュール
         ja_cvu_normalizer = JaCvuNormalizer()
                         
-        words = []
+        # words = []
         wordsByKind = {}
         for keyname in KeyNames:
             wordsByKind[keyname] = []
@@ -600,6 +600,7 @@ class ChartReader:
             # line = []
             for j, word in enumerate(LineWord):
                 t1 = word["text"]
+                # print(t1)
                 kind = pCheck.checkPattern(t1)
                 if kind != "":
                     word2 = {}
@@ -876,6 +877,7 @@ class ChartReader:
         # 主筋データが無い場合、又は、梁符号も柱符号も両方がない場合はそのページの処理を中止する。
         flag = False
         flag = flag or len(self.主筋) == 0
+        flag = flag or len(self.断面寸法) == 0
         flag = flag or (len(self.梁符号) == 0 and len(self.柱符号) == 0)
         flag = flag or (len(self.梁符号) > 0 and len(self.梁断面位置) == 0)
         
@@ -2792,11 +2794,9 @@ class ChartReader:
                         #end if
                         beam.append(dataDic1)
 
-                        #next :(for j in range(kindSameNMax):)
-                            
-                        beam2.append(beam)
-
-                    #next :(for bdata in Sec:)
+                    #next :(for j in range(kindSameNMax):)
+                        
+                    beam2.append(beam)
                         
                 #next :(for bdata in Sec:)
                 
@@ -2809,7 +2809,7 @@ class ChartReader:
                     #next
                     ColumnData.append(beam3)
                 #next
-            # #next
+            # #next for Sec in Section2:
         #end if    
 
         #=====================================================================
@@ -2997,140 +2997,140 @@ class ChartReader:
         return BeamData,ColumnData
     #end if
 
-
     #============================================================================
     #  表紙以外のページのチェック（外部から読み出す関数名）
     #============================================================================
 
-    # def PageCheck(self,filename, outdir, psn, PageNumber,ProcessN):
-    #     global flag1, fname, dir1, dir2, dir3, dir4, dir5, folderName, paraFileName
-    #     global ErrorFlag, ErrorMessage
+    def PageCheck(self,filename, outdir, psn, PageNumber,ProcessN):
+        global flag1, fname, dir1, dir2, dir3, dir4, dir5, folderName, paraFileName
+        global ErrorFlag, ErrorMessage
         
-    #     if filename =="" :
-    #         return False
-    #     #end if
-    #     print(filename)
-    #     pdf_file = filename
+        if filename =="" :
+            return False
+        #end if
+        print(filename)
+        pdf_file = filename
 
-    #     # PyPDF2のツールを使用してPDFのページ情報を読み取る。
-    #     # PDFのページ数と各ページの用紙サイズを取得
-    #     PaperSize = []
-    #     self.PaperRotate = []                
-    #     try:
-    #         with open(pdf_file, "rb") as input:
-    #             reader = PR2(input)
-    #             PageMax = len(reader.pages)     # PDFのページ数
-    #             # PaperSize = []
-    #             # PaperRotate = []
-    #             for page in reader.pages:       # 各ページの用紙サイズの読取り
-    #                 p_size = page.mediabox
-    #                 rotate = page.get('/Rotate', 0)
-    #                 self.PaperRotate.append(rotate)
-    #                 page_xmin = float(page.mediabox.lower_left[0])
-    #                 page_ymin = float(page.mediabox.lower_left[1])
-    #                 page_xmax = float(page.mediabox.upper_right[0])
-    #                 page_ymax = float(page.mediabox.upper_right[1])
-    #                 PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
-    #         #end with
-    #     except OSError as e:
-    #         print(e)
-    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-    #         return False
-    #     except:
-    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-    #         return False
-    #     #end try
+        # PyPDF2のツールを使用してPDFのページ情報を読み取る。
+        # PDFのページ数と各ページの用紙サイズを取得
+        PaperSize = []
+        self.PaperRotate = []                
+        try:
+            with open(pdf_file, "rb") as input:
+                reader = PR2(input)
+                PageMax = len(reader.pages)     # PDFのページ数
+                # PaperSize = []
+                # PaperRotate = []
+                for page in reader.pages:       # 各ページの用紙サイズの読取り
+                    p_size = page.mediabox
+                    rotate = page.get('/Rotate', 0)
+                    self.PaperRotate.append(rotate)
+                    page_xmin = float(page.mediabox.lower_left[0])
+                    page_ymin = float(page.mediabox.lower_left[1])
+                    page_xmax = float(page.mediabox.upper_right[0])
+                    page_ymax = float(page.mediabox.upper_right[1])
+                    PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
+            #end with
+        except OSError as e:
+            print(e)
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        except:
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        #end try
         
-    #     #=============================================================
-    #     # startpage = 1
-    #     # endpage = PageMax
+        #=============================================================
+        # startpage = 1
+        # endpage = PageMax
         
-    #     # # PDFMinerのツールの準備
-    #     # resourceManager = PDFResourceManager()
-    #     # # PDFから単語を取得するためのデバイス
-    #     # device = PDFPageAggregator(resourceManager, laparams=LAParams())
-    #     # # PDFから１文字ずつを取得するためのデバイス
-    #     # device2 = PDFPageAggregator(resourceManager)
+        # # PDFMinerのツールの準備
+        # resourceManager = PDFResourceManager()
+        # # PDFから単語を取得するためのデバイス
+        # device = PDFPageAggregator(resourceManager, laparams=LAParams())
+        # # PDFから１文字ずつを取得するためのデバイス
+        # device2 = PDFPageAggregator(resourceManager)
 
-    #     pageResultData = []
-    #     pageNo = []
-    #     BeamData = []
-    #     ColumnData = []
-    #     try:
+        pageResultData = []
+        pageNo = []
+        BeamData = []
+        ColumnData = []
+        try:
             
-    #         with pdfplumber.open(pdf_file) as pdf:
-    #             # interpreter = PDFPageInterpreter(resourceManager, device)
-    #             # interpreter2 = PDFPageInterpreter(resourceManager, device2)
+            with pdfplumber.open(pdf_file) as pdf:
+                # interpreter = PDFPageInterpreter(resourceManager, device)
+                # interpreter2 = PDFPageInterpreter(resourceManager, device2)
 
-    #             PageData = []
-    #             for page in pdf.pages:
-    #             # for page in PDFPage.get_pages(PDF):
-    #                 PageData.append(page)
-    #             #next
-    #             pageI = 0
-    #             # pageI2 = 0
-    #             # PageN2 = len(PageNumber)
-    #             flagPage = True
+                PageData = []
+                for page in pdf.pages:
+                # for page in PDFPage.get_pages(PDF):
+                    PageData.append(page)
+                #next
+                pageI = 0
+                # pageI2 = 0
+                # PageN2 = len(PageNumber)
+                flagPage = True
 
-    #             while flagPage:
-    #                 for i,p in enumerate(PageNumber):
-    #                     flagPage = False
-    #                     if p > 0:
-    #                         pageI = i + 1
-    #                         PageNumber[i] = 0
-    #                         flagPage = True
-    #                         page = PageData[i]
-    #                         ProcessN[psn] += 1
-    #                         break
-    #                     #end if
-    #                 #next
-    #                 if flagPage == False:
-    #                     break
-    #                 #end if
+                while flagPage:
+                    for i,p in enumerate(PageNumber):
+                        flagPage = False
+                        if p > 0:
+                            pageI = i + 1
+                            PageNumber[i] = 0
+                            flagPage = True
+                            page = PageData[i]
+                            ProcessN[psn] += 1
+                            break
+                        #end if
+                    #next
+                    if flagPage == False:
+                        break
+                    #end if
 
-    #                 # outfile = outdir + "/" + "outfile{:0=4}.pdf".format(pageI)
-    #                 ResultData = []
-    #                 print("ps={}:page={}:".format(psn,pageI), end="")
+                    # outfile = outdir + "/" + "outfile{:0=4}.pdf".format(pageI)
+                    ResultData = []
+                    print("ps={}:page={}:".format(psn,pageI), end="")
 
-    #                 BeamData1, ColumnData1 = self.ElementFinder(page)
+                    BeamData1, ColumnData1 = self.ElementFinder(page)
 
-    #                 # print(len(BeamData1),len(ColumnData1))
+                    # print(len(BeamData1),len(ColumnData1))
 
-    #                 if len(BeamData1) > 0:
-    #                         BeamData += BeamData1
-    #                 #end if
-    #                 if len(ColumnData1) > 0:
-    #                     ColumnData += ColumnData1
-    #                 #end if
+                    if len(BeamData1) > 0:
+                            BeamData += BeamData1
+                    #end if
+                    if len(ColumnData1) > 0:
+                        ColumnData += ColumnData1
+                    #end if
 
-    #             #next
+                #next
 
-    #             # fp.close()
-    #             folderName = ""
-    #             # os.remove("./kind.txt")
-    #         # end with
+                # fp.close()
+                folderName = ""
+                # os.remove("./kind.txt")
+            # end with
             
-    #         if len(BeamData)>0 or len(ColumnData)>0:
-    #             filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
-    #             filename2 = filename2.replace("/in/","/out/")
-    #             self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
-    #         #end if
+            if len(BeamData)>0 or len(ColumnData)>0:
+                filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
+                filename2 = filename2.replace("/in/","/out/")
+                self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
+            #end if
 
-    #     except OSError as e:
-    #         print(e)
-    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-    #         # print("******1")
-    #         return False
-    #     except:
-    #         logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-    #         # print("***********2")
-    #         return False
-    #     # end try
+        except OSError as e:
+            print(e)
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            # print("******1")
+            return False
+        except:
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            # print("***********2")
+            return False
+        # end try
 
-    #     # すべての処理がエラーなく終了したのでTrueを返す。
-    #     return True
+        # すべての処理がエラーなく終了したのでTrueを返す。
+        return True
 
-    # #end def    
+    # #end def   
+    
     #*********************************************************************************
 
 
@@ -3146,8 +3146,14 @@ class ChartReader:
 #======================================================================================
 
 if __name__ == '__main__':
+    # P='\s*G\d{1,2}\D*\s*\,\s*G\d{1,2}\D*\s*'
+    P='(\\s*G\\d{1,2}\\D*\\s*)|\\s*G\\d{1,2}\\D*\\s*\\,\\s*G\\d{1,2}\\D*\\s*'
+    # # P='\s*G\d{1,2}\D*\s*'
+    W= "G2, G2A"
+    # # W= "2G"
+    print(re.fullmatch(P,W) != None)
 
-    time_sta = time.time()  # 開始時刻の記録
+    time_sta = time.time()  # 開始時刻の記録(\\s*G\\d{1,2}\\D*\\s*)|\\s*G\\d{1,2}\\D*\\s*\\,\\s*G\\d{1,2}\\D*\\s*
 
     CR = ChartReader()
 
@@ -3158,14 +3164,23 @@ if __name__ == '__main__':
     # pdffname.append("ミックスデータ.pdf")
     # pdffname.append("構造図テストデータ2.pdf")
     
-    pdffname.append("構造図テストデータ.pdf")
-    pdffname.append("構造計算書テストデータ.pdf")
+    # pdffname.append("構造図テストデータ.pdf")
+    # pdffname.append("構造計算書テストデータ.pdf")
 
-    pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
-    pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
+    pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
     
-    pdffname.append("02構造図.pdf")
-    pdffname.append("02一貫計算書（一部）.pdf")
+    pdffname.append("02構造図（抜粋）.pdf")
+    pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
+
+    pdffname.append("03sawarabi 京都六角 計算書 (事前用)（抜粋）.pdf")
+    pdffname.append("03sawarabi 京都六角 構造図(事前用)（抜粋）.pdf")
+
+    # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
+    # pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    
+    # pdffname.append("02構造図.pdf")
+    # pdffname.append("02一貫計算書（一部）.pdf")
 
     # pdffname.append("03sawarabi 京都六角 計算書 (事前用).pdf")
     # pdffname.append("03sawarabi 京都六角 構造図(事前用).pdf")
