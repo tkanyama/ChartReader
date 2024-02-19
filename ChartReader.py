@@ -874,7 +874,13 @@ class ChartReader:
         #end if
 
         # 主筋データが無い場合、又は、梁符号も柱符号も両方がない場合はそのページの処理を中止する。
-        if len(self.主筋) == 0 or (len(self.梁符号) == 0 and len(self.柱符号) == 0):
+        flag = False
+        flag = flag or len(self.主筋) == 0
+        flag = flag or (len(self.梁符号) == 0 and len(self.柱符号) == 0)
+        flag = flag or (len(self.梁符号) > 0 and len(self.梁断面位置) == 0)
+        
+        # if len(self.主筋) == 0 or ((len(self.梁符号) == 0 and len(self.断面位置)==0) and len(self.柱符号) == 0):
+        if flag:
             # BeamData = []
             # ColumnData = []
             return False
@@ -3155,11 +3161,11 @@ if __name__ == '__main__':
     pdffname.append("構造図テストデータ.pdf")
     pdffname.append("構造計算書テストデータ.pdf")
 
-    # pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
-    # pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+    pdffname.append("(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
+    pdffname.append("(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
     
-    # pdffname.append("02構造図.pdf")
-    # pdffname.append("02一貫計算書（一部）.pdf")
+    pdffname.append("02構造図.pdf")
+    pdffname.append("02一貫計算書（一部）.pdf")
 
     # pdffname.append("03sawarabi 京都六角 計算書 (事前用).pdf")
     # pdffname.append("03sawarabi 京都六角 構造図(事前用).pdf")
