@@ -8,6 +8,7 @@
 import pdfplumber
 from io import StringIO
 import time
+import copy
 import pickle
 from pypdf import PdfReader as PR2 # 名前が上とかぶるので別名を使用
 
@@ -2406,7 +2407,7 @@ class ChartReader:
 
                                     dic2.append(dic)
                                     if Item == "階":
-                                        if abs(dic["xm"] - xm1) < self.ColumnPitch * 6:
+                                        if abs(dic["xm"] - xm1) < self.ColumnPitch * 9:
                                             Section2[i][j].append(dic)
                                         #end if
                                     else:
@@ -2998,6 +2999,165 @@ class ChartReader:
     #end if
 
     #============================================================================
+    # 複数のpickleファイルから梁データおよび柱データを呼び込みそれらを比較する関数
+    #============================================================================
+    def Compare_Data(self, picklefilenames):
+
+        fn = len(picklefilenames)
+        if fn >= 2 : # ファイルが2つ以上ある場合のみ処理を行う。
+            BeamFoors = []
+            BeamDics = []
+            ColumnFoors = []
+            ColumnDics = []
+            for fi, filename in enumerate(picklefilenames):
+                BeamData, ColumnData = self.Load_MemberData_Picle(filename)
+                Bfoor, Bdic = self.Classify_Data(BeamData)
+                BeamFoors.append(Bfoor)
+                BeamDics.append(Bdic)
+
+                Cfoor, Cdic = self.Classify_Data(ColumnData)
+                ColumnFoors.append(Cfoor)
+                ColumnDics.append(Cdic)
+            #next
+
+
+
+    #============================================================================
+    # 梁データまたは柱データからデータの辞書を作成する関数
+    #============================================================================
+    def Classify_Data(self, Data):
+        #=================================================================================
+        # 入力： BeamData または ColumnData
+        #
+        # 出力： FloorNames  :データに含まれる階のリスト [ "R","10","9"・・・・]
+        #       FloorDic    :階がキーの辞書（符号リストと符号リストがキーのデータの辞書を含む）
+        #           MemberNames :符号リスト ["G1","G2"・・・・]
+        #           MemberDic   :符号リストがキーのデータの辞書
+        #
+        #                       (データの例)
+        #                       '階':'R'
+        #                       '梁符号':'G1'
+        #                       '梁断面位置':'1通端'
+        #                       '断面寸法':'450x800'
+        #                       '上端筋:主筋':'5-D25'
+        #                       '下端筋:主筋':'4-D25'
+        #                       'あばら筋:フープ筋':'-D13@200'
+        #                       '腹筋':'2-D10'
+        #
+        #==================================================================================
+        
+        FloorDic = {}
+        FloorNames = []
+        if len(Data)>0:
+
+            Data1 = Data.copy()
+            # dic0 = Data1[0][0]
+            # keys = list(dic0.keys())
+            # MemberKey = keys[1]         # "梁符号" or "柱符号" 自動判別
+
+            # 複数の階が記載されている場合の処理
+            # [3,4]の場合はデータを1個追加する。[3,5]の場合はデータを2個追加する
+            Data2 = []
+            for i, D in enumerate(Data1):
+                D1 = D.copy()
+                floor = D[0]["階"]
+                if "," in floor:
+                    D2 = D1.copy()
+                    f0 = floor.split(",")
+                    
+                    f0.sort()
+                    f1 = []
+                    for ff in f0:
+                        f1.append(int(ff))
+                    #next
+                    f2 = f1[0]
+                    f3 = f1[1]
+                    for j in range(f2,f3+1):
+                        D3 = D2.copy()
+                        for D4 in D3:
+                            D4["階"] = str(j)
+                        #next
+                        Data2.append(copy.deepcopy(D3))
+                    #next
+                else:
+                    Data2.append(copy.deepcopy(D1))
+                #end if
+            #next
+            Data1 = copy.deepcopy(Data2)
+
+            # 階が修正されたデータで分類を行う。
+            dic0 = Data1[0][0]
+            keys = list(dic0.keys())
+            MemberKey = keys[1]         # "梁符号" or "柱符号" 自動判別
+
+            # Data中の階データの種類のリストを取得
+            # FloorNames = []
+            for D in Data1:
+                if not(D[0]["階"] in FloorNames):
+                    FloorNames.append(D[0]["階"])
+                #end if
+            #next
+            
+            L2 = []
+            for d in FloorNames:
+                if "R" in d:
+                    L2.append(1000)
+                else:
+                    L2.append(int(d))
+                #end if
+            #next
+            VArray = np.array(L2)
+            index1 = np.argsort(-VArray)    # 降順にソートするインデックスを取得
+            FloorNames2 = []
+            for i in range(len(index1)):
+                FloorNames2.append(FloorNames[index1[i]])
+            #next
+            FloorNames = FloorNames2
+            # FloorNames.sort(reverse=True)   # リストを降順で並び替え
+
+            # 同じ階のデータを抽出する。
+            # FloorDic = {}
+            for FloorName in FloorNames:
+                FloorDatas = []
+                for D in Data1:
+                    if D[0]["階"] == FloorName :
+                        FloorDatas.append(D)
+                    #end if
+                #next
+                
+                # 抽出したデータの符号名のリストを取得
+                MemberNames = []
+                for D in FloorDatas:
+                    if not(D[0][MemberKey] in MemberNames):
+                        MemberNames.append(D[0][MemberKey])
+                    #end if
+                #next
+                        
+                # MemberNames.sort(reverse=False)   # リストを昇順で並び替え
+                
+                # 同じ符号名のデータを抽出する。同じ階に同じ符号はないことが前提条件
+                MemberDic = {}
+                for MemberName in MemberNames:
+                    MemberDatas = []
+                    for D in FloorDatas:
+                        if D[0][MemberKey] == MemberName :
+                            MemberDatas.append(D)
+                        #end if
+                    #next
+                    # 符号名による辞書を作成
+                    MemberDic[MemberName] = MemberDatas
+                #next
+                FloorDic[FloorName] = [MemberNames, MemberDic]
+            #next
+        #end if
+        
+        return FloorNames,FloorDic
+    
+    #end def
+                
+
+
+    #============================================================================
     #  表紙以外のページのチェック（外部から読み出す関数名）
     #============================================================================
 
@@ -3146,77 +3306,90 @@ class ChartReader:
 #======================================================================================
 
 if __name__ == '__main__':
-    # P='\s*G\d{1,2}\D*\s*\,\s*G\d{1,2}\D*\s*'
-    P='(\\s*G\\d{1,2}\\D*\\s*)|\\s*G\\d{1,2}\\D*\\s*\\,\\s*G\\d{1,2}\\D*\\s*'
-    # # P='\s*G\d{1,2}\D*\s*'
-    W= "G2, G2A"
-    # # W= "2G"
-    print(re.fullmatch(P,W) != None)
 
     time_sta = time.time()  # 開始時刻の記録(\\s*G\\d{1,2}\\D*\\s*)|\\s*G\\d{1,2}\\D*\\s*\\,\\s*G\\d{1,2}\\D*\\s*
 
     CR = ChartReader()
 
-    Folder1 = "PDF"
+    flag = 2
 
-    pdffname =[]
-
-    # pdffname.append("ミックスデータ.pdf")
-    # pdffname.append("構造図テストデータ2.pdf")
-    
-    # pdffname.append("構造図テストデータ.pdf")
-    # pdffname.append("構造計算書テストデータ.pdf")
-
-    pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
-    pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
-    
-    pdffname.append("02構造図（抜粋）.pdf")
-    pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
-
-    pdffname.append("03sawarabi 京都六角 計算書 (事前用)（抜粋）.pdf")
-    pdffname.append("03sawarabi 京都六角 構造図(事前用)（抜粋）.pdf")
-
-    # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
-    # pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
-    
-    # pdffname.append("02構造図.pdf")
-    # pdffname.append("02一貫計算書（一部）.pdf")
-
-    # pdffname.append("03sawarabi 京都六角 計算書 (事前用).pdf")
-    # pdffname.append("03sawarabi 京都六角 構造図(事前用).pdf")
-
-
-    Folder1 = "PDF"
-    Folder2 = "CSV"
-    Folder3 = "PICKLE"
-    for pdf in pdffname:
-        print("ファイ名={}".format(pdf))
-        BeamData , ColumnData = CR.Read_Members_from_pdf(Folder1 + "/"+ pdf)
+    if flag == 1:
         
-        if len(BeamData) > 0 or len(ColumnData) > 0:
+        pdffname2 =[]
+        # pdffname2.append("PICKLE/01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）_部材リスト.pickle")
+        # pdffname2.append("PICKLE/01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）_部材リスト.pickle")
 
-            filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
-            filename2 = Folder3 + "/"+ filename2
-            CR.Save_MemberData_Picle(filename2,BeamData,ColumnData)
+        pdffname2.append("PICKLE/02一貫計算書（一部）（抜粋）_部材リスト.pickle")
+        pdffname2.append("PICKLE/02構造図（抜粋）_部材リスト.pickle")
+        
+        CR.Compare_Data(pdffname2)
 
-            filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
-            filename = Folder2 + "/"+ filename
+    elif flag == 2:
 
-            CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
+        pdffname =[]
+
+        # pdffname.append("ミックスデータ.pdf")
+        # pdffname.append("構造図テストデータ2.pdf")
+        
+        # pdffname.append("構造図テストデータ.pdf")
+        # pdffname.append("構造計算書テストデータ.pdf")
+
+        # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
+        # pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
+        
+        pdffname.append("02構造図（抜粋）.pdf")
+        pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
+
+        # pdffname.append("03sawarabi 京都六角 計算書 (事前用)（抜粋）.pdf")
+        # pdffname.append("03sawarabi 京都六角 構造図(事前用)（抜粋）.pdf")
+
+        # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図.pdf")
+        # pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力.pdf")
+        
+        # pdffname.append("02構造図.pdf")
+        # pdffname.append("02一貫計算書（一部）.pdf")
+
+        # pdffname.append("03sawarabi 京都六角 計算書 (事前用).pdf")
+        # pdffname.append("03sawarabi 京都六角 構造図(事前用).pdf")
+
+
+        Folder1 = "PDF"
+        Folder2 = "CSV"
+        Folder3 = "PICKLE"
+        for pdf in pdffname:
+            print("ファイ名={}".format(pdf))
+            BeamData , ColumnData = CR.Read_Members_from_pdf(Folder1 + "/"+ pdf)
+            
+            if len(BeamData) > 0 or len(ColumnData) > 0:
+
+                # FloorNames1,FloorDic1 = CR.Classify_Data(BeamData)
+                # FloorNames2,FloorDic2 = CR.Classify_Data(ColumnData)
+
+
+                filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".pickle"
+                filename2 = Folder3 + "/"+ filename2
+                CR.Save_MemberData_Picle(filename2,BeamData,ColumnData)
+
+                filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
+                filename = Folder2 + "/"+ filename
+
+                CR.Save_MemberData_Csv(filename, BeamData , ColumnData )
 
 
 
-        # filename = Folder1 + "/"+ pdf
+    #     # filename = Folder1 + "/"+ pdf
 
-        # filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
-        # filename2 = Folder3 + "/"+ filename2
+    #     # filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".picle"
+    #     # filename2 = Folder3 + "/"+ filename2
 
-        # CR.Read_and_Save_Members_To_Pickle(filename,filename2)
+    #     # CR.Read_and_Save_Members_To_Pickle(filename,filename2)
 
-    #next
+    # #next
     
     time_end = time.time()  # 終了時刻の記録
     print("処理時間 = {} sec".format(time_end - time_sta))
+
+
 
     
 
