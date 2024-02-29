@@ -11,6 +11,11 @@ import time
 import copy
 import pickle
 from pypdf import PdfReader as PR2 # 名前が上とかぶるので別名を使用
+from pypdf import PdfWriter as PW2 # 名前が上とかぶるので別名を使用
+
+import PyPDF2
+import openpyxl
+import glob
 
 # pip install numpy matplotlib scipy
 import numpy as np
@@ -20,9 +25,18 @@ import re
 import sys,csv,os
 import logging
 
+# pip install pdfrw
+from pdfrw import PdfReader
+from pdfrw.buildxobj import pagexobj
+from pdfrw.toreportlab import makerl
+
 # pip install reportlab ja_cvu_normalizer
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import mm
+
 from ja_cvu_normalizer.ja_cvu_normalizer import JaCvuNormalizer
 
 # 自作ツールの読み込み
@@ -83,7 +97,7 @@ class ChartReader:
             E_data2 = []
             L2 = []
             for i in range(len(E_data)):
-                floor = E_data1[i][0]["階"]
+                floor = E_data1[i][0]["階"][0]
                 if floor == "R":
                     L2.append(1000)
                 else:
@@ -116,16 +130,16 @@ class ChartReader:
             # BeamDataを階毎に梁符号の昇順で並び替える
             E_data2 = []
             L2 = []
-            foor = E_data1[0][0]["階"]
-            bn = E_data1[0][0][ItemName]
+            foor = E_data1[0][0]["階"][0]
+            bn = E_data1[0][0][ItemName][0]
             bn = re.sub(r"\D", "", bn)
             L2.append(int(bn))
             Beams = []
             Beams.append(E_data1[0])
             for i in range(1,len(E_data1)):
-                if foor == E_data1[i][0]["階"]:
+                if foor == E_data1[i][0]["階"][0]:
                     Beams.append(E_data1[i])
-                    bn = E_data1[i][0][ItemName]
+                    bn = E_data1[i][0][ItemName][0]
                     bn = re.sub(r"\D", "", bn)
                     L2.append(int(bn))
                 else:
@@ -138,8 +152,8 @@ class ChartReader:
                     E_data2 += Beam2
 
                     L2 = []
-                    foor = E_data1[i][0]["階"]
-                    bn = E_data1[i][0][ItemName]
+                    foor = E_data1[i][0]["階"][0]
+                    bn = E_data1[i][0][ItemName][0]
                     bn = re.sub(r"\D", "", bn)
                     L2.append(int(bn))
                     Beams = []
@@ -178,6 +192,9 @@ class ChartReader:
         Lheight = []
         for obj in page.extract_words():
             text = obj['text']
+            if text == "中中央央":
+                text = "中央"
+            #end if
             x0, y0, x1, y1 = obj['x0'], obj['top'], obj['x1'], obj['bottom']
             page_word.append({
                 'text': text, 'x0': x0, 'y0': y0, 'x1': x1, 'y1': y1,
@@ -392,7 +409,7 @@ class ChartReader:
 
                     addflag = False
 
-                    if abs(y00 - y10)<1.0:
+                    if abs(y00 - y10)<3.0:
                         if pCheck.isMember("断面寸法",text):        # [500 x 1,500]
                             addflag = True
                         elif pCheck.isMember("断面寸法2",text) :     # [b x D]
@@ -448,6 +465,8 @@ class ChartReader:
     #============================================================================
     def Read_Members_from_pdf(self, pdf_path,stpage1=1,edpage1=100):
 
+        self.ReadPageSize(pdf_path)
+
         # CR = ChartReader()
         BeamData = []
         ColumnData = []
@@ -468,6 +487,11 @@ class ChartReader:
 
             BeamData = []
             ColumnData = []
+            self.pageNoB = []
+            self.pageNoC = []
+            self.BeamD = []
+            self.ColumnD = []
+
             for pageN, page in enumerate(pdf.pages):
                 if pageN >= stpage -1 and pageN <= edpage -1:
 
@@ -481,10 +505,15 @@ class ChartReader:
                     print("  梁データ:{}個 , 柱データ:{}個".format(len(BeamData1), len(ColumnData1)))
                     if len(BeamData1) > 0:
                         BeamData += BeamData1
+                        self.pageNoB.append(pageN + 1)
+                        self.BeamD.append(BeamData1)
                     #end if
                     if len(ColumnData1) > 0:
                         ColumnData += ColumnData1
+                        self.pageNoC.append(pageN + 1)
+                        self.ColumnD.append(ColumnData1)
                     #end if
+                    
                 #end if
                 
             #next
@@ -499,7 +528,7 @@ class ChartReader:
         #     print('Exception!')
         #     flag = False
         # #end try
-        return BeamData, ColumnData
+        return  BeamData, ColumnData, self.構造計算書Flag
 
     # #end def
 
@@ -513,6 +542,8 @@ class ChartReader:
             return False
         #end if
         
+        self.ReadPageSize(pdf_path)
+
         flag = True
         try:
             if stpage1>0:
@@ -557,7 +588,7 @@ class ChartReader:
 
                 ColumnData = self.Sort_Element(ColumnData, ItemName="柱符号",sc=-1)  # sc=-1:降順,sc=1:昇順
 
-                self.Save_MemberData_Picle(pickle_path, BeamData, ColumnData)
+                self.Save_MemberData_Pickle(pickle_path, BeamData, ColumnData)
 
                 flag = True
             else:
@@ -679,6 +710,7 @@ class ChartReader:
         self.同上 = wordsByKind["同上"]
         self.断面リスト = wordsByKind["断面リスト"]
         self.階上項目 = wordsByKind["階上項目"]
+        self.断面 = wordsByKind["断面"]
 
         # 同じ行にある柱符号から表のコラム間隔self.ColumnPitchを抽出する。
         self.ColumnPitch = 0
@@ -873,6 +905,9 @@ class ChartReader:
                 # ColumnData = []
                 return False
             #end if
+            self.構造計算書Flag = True
+        else:
+            self.構造計算書Flag = False
         #end if
 
         # 主筋データが無い場合、又は、梁符号も柱符号も両方がない場合はそのページの処理を中止する。
@@ -947,25 +982,57 @@ class ChartReader:
             else:
                 # 階上項目（階、符号など）がない場合
                 # 項目名1（主筋など）の左端からコラムピッチ以内もののみ抽出
-                階2 = []
-                for d in self.階:
-                    flag = False
-                    xm = d["xm"]
-                    if d["row"] > 3 and d["row"] < self.rowmax-3:
-                        for d1 in self.項目名1:
-                            x0 = d1["xm"] - self.itemPitch*1.0
-                            x1 = d1["x1"] #+ self.itemPitch*0.5
-                            if xm > x0 and xm < x1:
+
+                if len(self.断面)>0:
+                    # 断面の単語がある場合はその位置より左側にあるものだけを階データとする。
+                    階2 = []
+                    for d in self.階:
+                        flag = False
+                        xm = d["xm"]
+                        for d2 in self.断面:
+                            x1 = d2["x1"]
+                            if xm < x1:
                                 flag = True
                                 break
                             #end if
                         #next
+                        if flag:
+                            階2.append(d)
+                        #end if
                     #next
-                    if flag:
-                        階2.append(d)
+                    self.階 = 階2 
+                else:
+                    # 階上項目（階、符号など）や断面がない場合
+                    # 項目名1（主筋など）の左端からコラムピッチ以内もののみ抽出
+                    if len(self.梁符号)>0:
+                        xmin = 10000
+                        for d in self.梁符号:
+                            if xmin>d["xm"]:
+                                xmin = d["xm"]
+                            #end if
+                        #next
                     #end if
-                #next
-                self.階 = 階2 
+                    if len(self.柱符号)>0:
+                        xmin = 10000
+                        for d in self.柱符号:
+                            if xmin>d["xm"]:
+                                xmin = d["xm"]
+                            #end if
+                        #next
+                    #end if
+                    xmin -= self.itemPitch/2
+                    階2 = []
+                    for d in self.階:
+                        flag = False
+                        xm = d["xm"]
+                        if xm < xmin:
+                            flag = True
+                        if flag:
+                            階2.append(d)
+                        #end if
+                    #next
+                    self.階 = 階2 
+                #end if
                     
             #end if
                 
@@ -1223,7 +1290,24 @@ class ChartReader:
         for j in range(len(index1)):
             L22.append(self.かぶり[index1[j]])
         #next
+            
+        # かぶりデータのうち、2個の数字が縦に並んでいるものまたはカッコを含むものを除外する。
         self.かぶり = L22
+        L2 = []
+        for D in self.かぶり:
+            h = abs(D["y1"] - D["y0"])
+            flag = True
+            # if h > self.ypitch*1.6:
+            #     flag = False
+            # #end if
+            if "(" in D["text"]:
+                flag = False
+            #end if
+            if flag :
+                L2.append(D)
+            #end if
+        #next
+        self.かぶり = L2        
 
         return True
     
@@ -1261,6 +1345,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         Section2.append(sn2)
@@ -1275,6 +1362,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
@@ -1295,6 +1385,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1314,6 +1407,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
@@ -1334,6 +1430,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1353,6 +1452,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
@@ -1373,6 +1475,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1392,6 +1497,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
@@ -1412,6 +1520,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1435,6 +1546,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1454,6 +1568,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
@@ -1474,6 +1591,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1497,6 +1617,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1517,6 +1640,9 @@ class ChartReader:
                         dic["row"] = self.梁断面位置[i]["row"]
                         dic["xm"] = self.梁断面位置[i]["xm"]
                         dic["y0"] = self.梁断面位置[i]["y0"]
+                        dic["y1"] = self.梁断面位置[i]["y1"]
+                        dic["x0"] = self.梁断面位置[i]["x0"]
+                        dic["x1"] = self.梁断面位置[i]["x1"]
                         dic["item"] = self.梁断面位置[i]["item"]
                         sn2.append([dic])
                         # sn2.append([梁断面位置[i]["text"] , 梁断面位置[i]["kind"] , i , 梁断面位置[i]["row"]])
@@ -1537,6 +1663,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1560,6 +1689,9 @@ class ChartReader:
                                     dic["row"] = self.梁断面位置[j]["row"]
                                     dic["xm"] = self.梁断面位置[j]["xm"]
                                     dic["y0"] = self.梁断面位置[j]["y0"]
+                                    dic["y1"] = self.梁断面位置[j]["y1"]
+                                    dic["x0"] = self.梁断面位置[j]["x0"]
+                                    dic["x1"] = self.梁断面位置[j]["x1"]
                                     dic["item"] = self.梁断面位置[j]["item"]
                                     sn2.append([dic])
                                     # sn2.append([梁断面位置[j]["text"] , 梁断面位置[j]["kind"] , j , 梁断面位置[j]["row"]])
@@ -1629,6 +1761,7 @@ class ChartReader:
                     #next
                 #end if
             #next
+                        
 
             for i in range(len(Section)):
                 bn = len(Section[i])
@@ -1681,6 +1814,9 @@ class ChartReader:
                         dic["row"] = dd[0]["row"]
                         dic["xm"] = dd[0]["xm"]
                         dic["y0"] = dd[0]["y0"]
+                        dic["y1"] = dd[0]["y1"]
+                        dic["x0"] = dd[0]["x0"]
+                        dic["x1"] = dd[0]["x1"]
                         dic["item"] = dd[0]["item"]
                         data.append(dic)
                         flag1 = False   # 梁符号1が見つかった場合はFlag1をFalseにする。
@@ -1704,6 +1840,9 @@ class ChartReader:
                         dic["row"] = dd[kk]["row"]
                         dic["xm"] = dd[kk]["xm"]
                         dic["y0"] = dd[kk]["y0"]
+                        dic["y1"] = dd[kk]["y1"]
+                        dic["x0"] = dd[kk]["x0"]
+                        dic["x1"] = dd[kk]["x1"]
                         dic["item"] = dd[kk]["item"]
                         data.append(dic)
                         flag1 = False   # 梁符号1が見つかった場合はFlag1をFalseにする。
@@ -1742,6 +1881,9 @@ class ChartReader:
                             dic["row"] = d1["row"]
                             dic["xm"] = d1["xm"]
                             dic["y0"] = d1["y0"]
+                            dic["y1"] = d1["y1"]
+                            dic["x0"] = d1["x0"]
+                            dic["x1"] = d1["x1"]
                             dic["item"] = d1["item"]
                             data.append(dic)
                             
@@ -1758,6 +1900,9 @@ class ChartReader:
                             dic["row"] = data[0]["row"]
                             dic["xm"] = data[0]["xm"]
                             dic["y0"] = data[0]["y0"]
+                            dic["y1"] = data[0]["y1"]
+                            dic["x0"] = data[0]["x0"]
+                            dic["x1"] = data[0]["x1"]
                             dic["item"] = data[0]["item"]
                             s2.append(dic)
                             for j in range(len(Section2[i])):
@@ -1803,55 +1948,86 @@ class ChartReader:
                 #   階に各部材を追加する
                 #
                 if len(self.階)>0:
-                    ItemName2 = ["階"]
-                    
+                    xlength = 0
+                    sm0 = self.階[0]["xm"]
+                    for j in range(1,len(self.階)):
+                        sm1 = self.階[j]["xm"]
+                        xlength1 = sm1 - sm0
+                        if xlength1>xlength:
+                            xlength = xlength1
+                        #end if
+                        sm0 = sm1
+                    #next
+                        
                     for j in range(len(Section[i])):
+
                         row1 = Section[i][j]["row"]
                         rmax = Section[i][j]["rmax"]
-                        xm1 = Section[i][0]["xm"]
-                        for Item in ItemName2:
-                            # data = []
-                            for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
-                                xm = d1["xm"]
-                                row = d1["row"]
-                                if row >= row1 and row <= rmax and xm < xm1:
-                                    # data.append(d1)
-                                    dic = {}
-                                    dic["kind"] = d1["kind"]
-                                    floor = d1["text"]
-
-                                    # 階はＲ以外は数値のみを追加する。　階の字やFLは削除
-                                    if floor[0] == "R":
-                                        floor = "R"
+                        xm1 = Section[i][j]["xm"]
+                        
+                        dic2 = []
+                        for k, d1 in enumerate(self.階):   # ローカル変数を名前で指定する関数
+                            xm = d1["xm"]
+                            row = d1["row"]
+                            
+                            if row >= row1 and row <= rmax and xm < xm1 :
+                                
+                                dic = {}
+                                dic["kind"] = d1["kind"]
+                                floor = d1["text"]
+                                if floor[0] == "R":
+                                    floor = "R"
+                                else:
+                                    if "," in floor:
+                                        floor2 = floor.split(",")
+                                        floor = ""
+                                        for f in floor2:
+                                            floor += re.sub(r"\D", "", f) + ","
+                                        #next
+                                        floor = floor[0:len(floor)-1]
                                     else:
-                                        #  階が一カ所に複数記載されている場合はカンマ区切りで追加する
-                                        if "," in floor:
-                                            floor2 = floor.split(",")
-                                            floor = ""
-                                            for f in floor2:
-                                                floor += re.sub(r"\D", "", f) + ","
-                                            #next
-                                            floor = floor[0:len(floor)-1]
-                                        else:
-                                            floor = re.sub(r"\D", "", floor)
-                                        #end if
+                                        floor = re.sub(r"\D", "", floor)
                                     #end if
-                                    dic["text"] = floor # 階はＲ以外は数値のみを追加する。　階の字やFLは削除
-                                    dic["number"] = k
-                                    dic["row"] = d1["row"]
-                                    dic["xm"] = d1["xm"]
-                                    dic["y0"] = d1["y0"]
-                                    dic["item"] = d1["item"]
-                                    Section2[i][j].append(dic)
+                                #end if
+                                dic["text"] = floor
+                                # dic["text"] = d1["text"]
+                                dic["number"] = k
+                                dic["row"] = d1["row"]
+                                dic["xm"] = d1["xm"]
+                                dic["y0"] = d1["y0"]
+                                dic["y1"] = d1["y1"]
+                                dic["x0"] = d1["x0"]
+                                dic["x1"] = d1["x1"]
+                                dic["item"] = d1["item"]
+
+                                dic2.append(dic)
+                                
+                            #end if
+                        #next for k, d1 in enumerate(self.階)
+                        
+                        # 部材表が左右に２つ以上並ぶ場合は「階データ」が複数列選択されてしまう場合がある。
+                        # その場合は一番右側にある列だけを追加する。
+                        if len(dic2)>0:
+                            # 選択された「階データ」のxmの最大値を検出する。１列しかない場合も同じ処理を行う。
+                            xm_max = dic2[0]["xm"]
+                            for d in dic2:
+                                if d["xm"] > xm_max:
+                                    xm_max = d["xm"]
                                 #end if
                             #next
-                            
+                            # xmの最大値付近にある「階データ」のみを追加していく
+                            for d in dic2:
+                                if d["xm"] > xm_max - self.itemPitch/4 and d["xm"] < xm_max + self.itemPitch/4:
+                                    Section2[i][j].append(d)
+                                #end if
+                            next
                         #next
-                    #next
+                            
+                    #next (for j in range(len(Section[i])):)
                 
-                #end if
-
-            #next :(for i in range(len(Section)):)
+                #end if (if len(self.階)>0:)
+                            
+            # #next :(for i in range(len(Section)):)
 
 
             # データに梁符号が含まれているものだけを抽出する。        
@@ -1866,6 +2042,28 @@ class ChartReader:
                         break
                     #end if
                 #next
+                
+                # ただし、梁断面位置のすぐ上に小梁符号があるももは除外する
+                if len(self.小梁符号)>0:
+                    d1 = data[0]
+                    row0 = d1["row"]
+                    xm0 = d1["xm"]
+                    # flag2 = False
+                    for d2 in self.小梁符号:
+                        row1 = d2["row"]
+                        xm1 = d2["xm"]
+                        if abs(row0 - row1)>0 and abs(row0 - row1)<5 and abs(xm0 - xm1) < self.itemPitch*1:
+                            flag = False
+                            # flag2 = True
+                            break
+                        #end if
+                    #next
+                #end id
+                # if flag2:
+                #     break
+                # #end if
+                #end if
+                        
                 if flag :
                     Section22.append( Section2[i])
                 #end if
@@ -2019,7 +2217,7 @@ class ChartReader:
                                         else:
                                             key2 = key
                                         #end if
-                                        dataDic1.append([key2,data["text"]])
+                                        dataDic1.append([key2,data["text"],data["x0"],data["x1"],data["y0"],data["y1"]])
                                     #nex
                                 else:
                                     n2 = 0
@@ -2036,7 +2234,7 @@ class ChartReader:
                                         else:
                                             key2 = key
                                         #end if
-                                        dataDic1.append([key2,data["text"]])
+                                        dataDic1.append([key2,data["text"],data["x0"],data["x1"],data["y0"],data["y1"]])
                                     #next
                                 #next
                                 #end if
@@ -2053,7 +2251,7 @@ class ChartReader:
                                 else:
                                     floorName = re.sub(r"\D", "", hname)
                                 #end if
-                                dataDic1.append(["階",floorName])
+                                dataDic1.append(["階",floorName,-1,-1,-1,-1])
                             #end if
                             beam.append(dataDic1)
 
@@ -2075,7 +2273,8 @@ class ChartReader:
                     BeamData.append(beam3)
                 #next
                 
-            
+                # BeamData = BeamData2
+                    
             #next :(for Sec in Section2:)
             
         #end if : (if dn > 0 and len(梁符号) > 0:)
@@ -2141,13 +2340,27 @@ class ChartReader:
                 dic = {}
                 for k ,Number in enumerate(NumberOfKey):
                     for num in Number:
-                        dic[keys[k]] = data[num][1]
+                        # dic[keys[k]] = data[num][1]
+                        dic[keys[k]] = [data[num][1],data[num][2],data[num][3],data[num][4],data[num][5]]
                     #next
                 #next
                 beam2.append(dic)
             #next
             BeamData2.append(beam2)
             
+        #next
+        BeamData = BeamData2
+
+        BeamData2 = []
+        for Beam in BeamData:
+            Beam2 = []
+            for B in Beam:
+                B2 = B
+                bname = B["梁符号"][0]
+                B2["梁符号"][0] = bname.replace("F","")
+                Beam2.append(B2)
+            #next
+            BeamData2.append(Beam2)
         #next
         BeamData = BeamData2
 
@@ -2259,6 +2472,7 @@ class ChartReader:
             #next        
 
             for i in range(len(Section)):
+            
                 bn = len(Section[i])
                 if bn == 1:
                     xm0 = Section[i][0]["xm"]
@@ -2359,84 +2573,89 @@ class ChartReader:
                     
                 #next :(for Item in ItemName:)
                                             
-                
                                 
                 if len(self.階)>0:
-                    ItemName2 = ["階"]
+                    xlength = 0
+                    sm0 = self.階[0]["xm"]
+                    for j in range(1,len(self.階)):
+                        sm1 = self.階[j]["xm"]
+                        xlength1 = sm1 - sm0
+                        if xlength1>xlength:
+                            xlength = xlength1
+                        #end if
+                        sm0 = sm1
+                    #next
                     
                     for j in range(len(Section[i])):
+
                         row1 = Section[i][j]["row"]
                         rmax = Section[i][j]["rmax"]
-                        xm1 = Section[i][0]["xm"]
-                        for Item in ItemName2:
-                            # data = []
-                            dic2 = []
-                            for k, d1 in enumerate(getattr(self, Item)):   # ローカル変数を名前で指定する関数
-                                xm = d1["xm"]
-                                row = d1["row"]
-                                # if row >= row1 and row <= rmax and xm < xm1 and abs(xm1-xm)<self.ColumnPitch*3.0:
-                                if row >= row1 and row <= rmax and xm < xm1 :
-                                    # data.append(d1)
-                                    dic = {}
-                                    dic["kind"] = d1["kind"]
-                                    floor = d1["text"]
-                                    if floor[0] == "R":
-                                        floor = "R"
+                        xm1 = Section[i][j]["xm"]
+                        
+                        dic2 = []
+                        for k, d1 in enumerate(self.階):   # ローカル変数を名前で指定する関数
+                            xm = d1["xm"]
+                            row = d1["row"]
+                            
+                            if row >= row1 and row <= rmax and xm < xm1 :
+                                # data.append(d1)
+                                dic = {}
+                                dic["kind"] = d1["kind"]
+                                floor = d1["text"]
+                                if floor[0] == "R":
+                                    floor = "R"
+                                else:
+                                    if "," in floor:
+                                        floor2 = floor.split(",")
+                                        floor = ""
+                                        for f in floor2:
+                                            floor += re.sub(r"\D", "", f) + ","
+                                        #next
+                                        floor = floor[0:len(floor)-1]
                                     else:
-                                        if "," in floor:
-                                            floor2 = floor.split(",")
-                                            floor = ""
-                                            for f in floor2:
-                                                floor += re.sub(r"\D", "", f) + ","
-                                            #next
-                                            floor = floor[0:len(floor)-1]
-                                        else:
-                                            floor = re.sub(r"\D", "", floor)
-                                        #end if
-                                    #end if
-                                    dic["text"] = floor
-                                    # dic["text"] = d1["text"]
-                                    dic["number"] = k
-                                    dic["row"] = d1["row"]
-                                    dic["xm"] = d1["xm"]
-                                    dic["y0"] = d1["y0"]
-                                    dic["y1"] = d1["y1"]
-                                    dic["x0"] = d1["x0"]
-                                    dic["x1"] = d1["x1"]
-                                    dic["item"] = d1["item"]
-
-                                    dic2.append(dic)
-                                    if Item == "階":
-                                        if abs(dic["xm"] - xm1) < self.ColumnPitch * 9:
-                                            Section2[i][j].append(dic)
-                                        #end if
-                                    else:
-                                        Section2[i][j].append(dic)
+                                        floor = re.sub(r"\D", "", floor)
                                     #end if
                                 #end if
+                                dic["text"] = floor
+                                # dic["text"] = d1["text"]
+                                dic["number"] = k
+                                dic["row"] = d1["row"]
+                                dic["xm"] = d1["xm"]
+                                dic["y0"] = d1["y0"]
+                                dic["y1"] = d1["y1"]
+                                dic["x0"] = d1["x0"]
+                                dic["x1"] = d1["x1"]
+                                dic["item"] = d1["item"]
+
+                                dic2.append(dic)
+                                
+                            #end if (if row >= row1 and row <= rmax and xm < xm1 :)
+                                
+                        #next for k, d1 in enumerate(self.階)
+
+                        # 部材表が左右に２つ以上並ぶ場合は「階データ」が複数列選択されてしまう場合がある。
+                        # その場合は一番右側にある列だけを追加する。
+                        if len(dic2)>0:
+                            # 選択された「階データ」のxmの最大値を検出する。１列しかない場合も同じ処理を行う。
+                            xm_max = dic2[0]["xm"]
+                            for d in dic2:
+                                if d["xm"] > xm_max:
+                                    xm_max = d["xm"]
+                                #end if
                             #next
-                                    
-                            # # 階データが複数ある場合は最も近いものを選択する。
-                            # if len(dic2)>1 :
-                            #     xL0 = abs(dic2[0]["xm"] - xm1)
-                            #     xn = 0
-                            #     for k in range(1,len(dic2)):
-                            #         xL1 = abs(dic2[k]["xm"] - xm1)
-                            #         if xL1 < xL0:
-                            #             xn = k
-                            #         #end if
-                            #     #next
-                            #     Section2[i][j].append(dic2[xn])
-                            # else:
-                            #     Section2[i][j].append(dic2[0])
-                            # #end if
-                            
-                            
-                            
+                            # xmの最大値付近にある「階データ」のみを追加していく
+                            for d in dic2:
+                                if d["xm"] > xm_max - self.itemPitch/4 and d["xm"] < xm_max + self.itemPitch/4:
+                                    Section2[i][j].append(d)
+                                #end if
+                            next
                         #next
-                    #next
+
+                    #next (for j in range(len(Section[i])):)
                 
-                #end if
+                #end if (if len(self.階)>0:)
+            
+            #next (for i in range(len(Section)):)
 
             
 
@@ -2461,7 +2680,6 @@ class ChartReader:
             #next
             Section2 = Section22
             
-
             #==========================================================
             # 表に空欄がある場合にそこに「no data」を追加する処理（柱のみの処理）
             #==========================================================
@@ -2604,6 +2822,10 @@ class ChartReader:
                                     DD["row"] = row0 + II + 1
                                     DD["y0"] = y0 + (II + 1)*self.ypitch + self.ypitch*3
                                     DD["y1"] = y1 + (II + 1)*self.ypitch + self.ypitch*3
+                                    # DD["y0"] = -1
+                                    # DD["y1"] = -1
+                                    # DD["x0"] = -1
+                                    # DD["x1"] = -1
                                     DD["text"] = "同上"
                                     bdata2.append(DD.copy())
                                 #next
@@ -2741,10 +2963,10 @@ class ChartReader:
                                         key2 = key
                                     #end if
                                     if key == "柱符号":
-                                        dataDic1.append([key2,data["text"]])
+                                        dataDic1.append([key2,data["text"],data["x0"],data["x1"],data["y0"],data["y1"]])
                                     else:
                                         if abs(n - n0) < 4:
-                                            dataDic1.append([key2,data["text"]])
+                                            dataDic1.append([key2,data["text"],data["x0"],data["x1"],data["y0"],data["y1"]])
                                             n0 = n
                                         #end if
                                     #end if
@@ -2765,10 +2987,10 @@ class ChartReader:
                                         key2 = key
                                     #end if
                                     if key == "柱符号":
-                                        dataDic1.append([key2,data["text"]])
+                                        dataDic1.append([key2,data["text"],data["x0"],data["x1"],data["y0"],data["y1"]])
                                     else:
                                         if abs(n - n0) < 4:
-                                            dataDic1.append([key2,data["text"]])
+                                            dataDic1.append([key2,data["text"],data["x0"],data["x1"],data["y0"],data["y1"]])
                                             n0 = n
                                         #end if
                                     #end if
@@ -2791,7 +3013,7 @@ class ChartReader:
                             else:
                                 floorName = hname[0] + "FL"
                             #end if
-                            dataDic1.append(["階",floorName])
+                            dataDic1.append(["階",floorName ,-1,-1,-1,-1])
                         #end if
                         beam.append(dataDic1)
 
@@ -2817,57 +3039,59 @@ class ChartReader:
         # 柱データを辞書形式に変換する処理
         #=====================================================================
         
-        ColumnData2 = []
-        for i,beam in enumerate(ColumnData):
-            # 梁データ毎にkeyを取り出す。
-            keys = []
-            for j, data in enumerate(beam):
-                for k in range(len(data)):
-                    if not(data[k][0] in keys):
-                        keys.append(data[k][0])
+        if len(ColumnData)>0:
+            ColumnData2 = []
+            for i,beam in enumerate(ColumnData):
+                # 梁データ毎にkeyを取り出す。
+                keys = []
+                for j, data in enumerate(beam):
+                    for k in range(len(data)):
+                        if not(data[k][0] in keys):
+                            keys.append(data[k][0])
+                        #end if
+                    #next
+                #next
+                # keyの先頭を"階"データにする。
+                keys2 = []
+                for key in keys:
+                    if key == "階":
+                        keys2.append(key)
+                        break
                     #end if
                 #next
-            #next
-            # keyの先頭を"階"データにする。
-            keys2 = []
-            for key in keys:
-                if key == "階":
-                    keys2.append(key)
-                    break
-                #end if
-            #next
-            for key in keys:
-                if key != "階":
-                    keys2.append(key)
-                #end if
-            #next
-            keys = keys2
+                for key in keys:
+                    if key != "階":
+                        keys2.append(key)
+                    #end if
+                #next
+                keys = keys2
 
-            # 各keyのデータが何番目にあるかを抽出する。
-            NumberOfKey = []
-            for j, key in enumerate(keys):
-                n1 = []
-                for k in range(len(data)):
-                    if key == data[k][0]:
-                        n1.append(k)
-                    #end if
+                # 各keyのデータが何番目にあるかを抽出する。
+                NumberOfKey = []
+                for j, key in enumerate(keys):
+                    n1 = []
+                    for k in range(len(data)):
+                        if key == data[k][0]:
+                            n1.append(k)
+                        #end if
+                    #next
+                    NumberOfKey.append(n1[0])
                 #next
-                NumberOfKey.append(n1[0])
-            #next
 
-            beam2 = []
-            for j, data in enumerate(beam):
-                dic = {}
-                for k in range(len(data)):
-                    dic[keys[k]] = data[NumberOfKey[k]][1]
-                    #end if
+                beam2 = []
+                for j, data in enumerate(beam):
+                    dic = {}
+                    for k in range(len(data)):
+                        dic[keys[k]] = [data[NumberOfKey[k]][1],data[NumberOfKey[k]][2],data[NumberOfKey[k]][3],data[NumberOfKey[k]][4],data[NumberOfKey[k]][5]]
+                        #end if
+                    #next
+                    beam2.append(dic)
                 #next
-                beam2.append(dic)
+                ColumnData2.append(beam2)
+                
             #next
-            ColumnData2.append(beam2)
-            
-        #next
-        ColumnData = ColumnData2
+            ColumnData = ColumnData2
+        #end if
         
         return ColumnData
     
@@ -2931,7 +3155,8 @@ class ChartReader:
                             data = []
                             data.append("")
                             for key in keys:
-                                data.append(beam[key])
+                                d1 = beam[key]
+                                data.append(d1[0])
                             #next
                             writer.writerow(data)
                         #next
@@ -2955,7 +3180,8 @@ class ChartReader:
                             data = []
                             data.append("")
                             for key in keys:
-                                data.append(Colum[key])
+                                d1 = Colum[key]
+                                data.append(d1[0])
                             #next
                             writer.writerow(data)
                         #next
@@ -2970,9 +3196,9 @@ class ChartReader:
     #============================================================================
     #　梁データまたは柱データをpickleファイルに書き出す関数
     #============================================================================
-    def Save_MemberData_Picle(self, filename, BeamData, ColumnData):
+    def Save_MemberData_Pickle(self, filename, BeamData, ColumnData,Kflag ):
         if (len(BeamData) >0 or len(ColumnData)>0) and filename != "":
-            dlist = [BeamData,ColumnData]
+            dlist = [BeamData,ColumnData, Kflag]
             
             with open(filename, mode="wb") as f:
                 pickle.dump(dlist, f)
@@ -2994,23 +3220,302 @@ class ChartReader:
             #end with
             BeamData = dlist[0]
             ColumnData = dlist[1]
+            Kflag = dlist[2]
         #end if
-        return BeamData,ColumnData
+        return BeamData, ColumnData, Kflag
     #end if
+
+    #============================================================================
+    # PDFファイル全ページの用紙サイズを読み取る関数
+    #============================================================================
+    def ReadPageSize(self, pdf_file):
+        self.PaperSize = []
+        self.PaperRotate = []                
+        try:
+            with open(pdf_file, "rb") as input:
+                reader = PR2(input)
+                PageMax = len(reader.pages)     # PDFのページ数
+                # PaperSize = []
+                # PaperRotate = []
+                for page in reader.pages:       # 各ページの用紙サイズの読取り
+                    p_size = page.mediabox
+                    rotate = page.get('/Rotate', 0)
+                    # page.rotate(90)
+                    self.PaperRotate.append(rotate)
+                    page_xmin = float(page.mediabox.lower_left[0])
+                    page_ymin = float(page.mediabox.lower_left[1])
+                    page_xmax = float(page.mediabox.upper_right[0])
+                    page_ymax = float(page.mediabox.upper_right[1])
+                    self.PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
+            #end with
+            return True
+        except OSError as e:
+            print(e)
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        except:
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        #end try
+    #end def
+
+
+    #============================================================================
+    # PDFに検出した梁および柱部材の項目に四角の枠線を描画する関数
+    #============================================================================
+    def DrawRectOnPdf(self,pdf_file,outpath):
+
+        try:
+            in_path = pdf_file
+
+            # PDFを読み込む
+            pdf = PdfReader(in_path, decompress=False)
+
+            import random
+
+            d = str(int(random.random()*100000))
+            # import datetime
+
+            # t_delta = datetime.timedelta(hours=9)
+            # JST = datetime.timezone(t_delta, 'JST')
+            # now = datetime.datetime.now(JST)
+            # # YYYYMMDDhhmmss形式に書式化
+            # d = now.strftime('%Y%m%d%H%M%S')
+            out_path = "一時作成ファイル" + d + ".pdf"
+
+            if len(self.BeamD)>0 or len(self.ColumnD)>0:
+                pageR = self.PaperRotate[0]
+                
+                pageSizeX = float(self.PaperSize[0][0])
+                pageSizeY = float(self.PaperSize[0][1])
+                cc = canvas.Canvas(out_path, pagesize=(pageSizeX,pageSizeY))
+            #end if
+                
+            i = 0
+            PRotate = []
+
+            # 梁部材データ
+            if len(self.BeamD)>0 and len(self.pageNoB)>0:
+                for i,Beam in enumerate(self.BeamD):
+                    pageN = self.pageNoB[i] 
+
+                    # 保存先PDFデータを作成
+                    pageR = self.PaperRotate[pageN-1]
+                    PRotate.append(pageR)
+                    pageSizeX = float(self.PaperSize[pageN-1][0])
+                    pageSizeY = float(self.PaperSize[pageN-1][1])
+                    
+                    page = pdf.pages[pageN - 1]
+                    page.Rotate = pageR
+                    
+                    # PDFデータへのページデータの展開
+                    # cc.setPageSize = (pageSizeX,pageSizeY)
+                    cc.rotate(pageR)
+                    cc.setPageSize = (pageSizeX,pageSizeY)
+                    pp = pagexobj(page) #ページデータをXobjへの変換
+                    rl_obj = makerl(cc, pp) # ReportLabオブジェクトへの変換  
+                    
+                    cc.doForm(rl_obj) # 展開
+                    
+                    if pageR == 90:
+                        Y0 = 0
+                    else:
+                        Y0 = pageSizeY
+                    #end if
+                        
+                    for bd in Beam:
+                        ResultData = bd
+                        
+                        # ページの左肩に検出個数を印字
+                        cc.setFillColor("red")
+                        font_name = "ipaexg"
+                        cc.setFont(font_name, 12)
+                        t2 = "梁データの検出結果 Page={}".format(pageN)
+                        cc.drawString(20 * mm,  Y0 - 10 * mm, t2)
+                        cc.setLineWidth(0.2)
+                                
+                        # 該当する座標に四角形を描画
+                        for R1 in ResultData:
+                            
+                            keys = list(R1.keys())
+                            for key in keys:
+                                R2 = R1[key]
+                                text = R2[0]
+                                x0 = R2[1]
+                                y0 = Y0 - R2[3]
+                                x1 = R2[2]
+                                y1 = Y0 - R2[4]
+                                width = x1 - x0
+                                height = y1 - y0
+
+                                # 長方形の描画
+                                # if text != "同上":
+                                cc.setFillColor("white", 0.5)
+                                cc.setStrokeColorRGB(1.0, 0, 0)
+                                cc.rect(x0, y0, width, height, fill=0)
+                                # else:
+                                #     a=0
+                                #end if
+                            
+                            #next
+
+                            # if flag:    # "壁の検定表"の場合は、四角形の右肩に数値を印字
+                            #     cc.setFillColor("red")
+                            #     font_name = "ipaexg"
+                            #     cc.setFont(font_name, 7)
+                            #     t2 = " {:.2f}".format(a)
+                            #     cc.drawString(origin[0]+origin[2], origin[1]+origin[3], t2)
+                            # #end if
+                        #next
+                    #next
+
+                    # ページデータの確定
+                    cc.showPage()
+                # next
+            #end if
+
+            # 柱部材データ
+            if len(self.ColumnD)>0 and len(self.pageNoC)>0:
+                
+                for i,Column in enumerate(self.ColumnD):
+                    pageN = self.pageNoC[i] 
+
+                    # 保存先PDFデータを作成
+                    pageR = self.PaperRotate[pageN-1]
+                    PRotate.append(pageR)
+                    pageSizeX = float(self.PaperSize[pageN-1][0])
+                    pageSizeY = float(self.PaperSize[pageN-1][1])
+                    
+                    page = pdf.pages[pageN - 1]
+                    page.Rotate = pageR
+
+                    # PDFデータへのページデータの展開
+                    cc.setPageSize = (pageSizeX,pageSizeY)
+                    cc.rotate(pageR)
+                    pp = pagexobj(page) #ページデータをXobjへの変換
+                    rl_obj = makerl(cc, pp) # ReportLabオブジェクトへの変換  
+                    cc.doForm(rl_obj) # 展開
+                    # ResultData = pageResultData[pageI]
+
+                    for bd in Column:
+                        ResultData = bd
+                        
+                        
+                        
+                        if pageR == 90:
+                            Y0 = 0
+                        else:
+                            Y0 = pageSizeY
+                        #end if
+                            
+                        # ページの左肩に検出個数を印字
+                        cc.setFillColor("red")
+                        font_name = "ipaexg"
+                        cc.setFont(font_name, 12)
+                        t2 = "柱データの検出結果 Page={}".format(pageN)
+                        cc.drawString(20 * mm,  Y0 - 10 * mm, t2)
+                        cc.setLineWidth(0.2)
+                        
+                        # 該当する座標に四角形を描画
+                        for R1 in ResultData:
+                            
+                            keys = list(R1.keys())
+                            for key in keys:
+                                R2 = R1[key]
+                                text = R2[0]
+                                x0 = R2[1]
+                                y0 = Y0 - R2[3]
+                                x1 = R2[2]
+                                y1 = Y0 - R2[4]
+                                width = x1 - x0
+                                height = y1 - y0
+                                if text != "同上":
+                                    # 長方形の描画
+                                    cc.setFillColor("white", 0.5)
+                                    cc.setStrokeColorRGB(1.0, 0, 0)
+                                    cc.rect(x0, y0, width, height, fill=0)
+                                # end if
+                                
+                            #next
+
+                            # if flag:    # "壁の検定表"の場合は、四角形の右肩に数値を印字
+                            #     cc.setFillColor("red")
+                            #     font_name = "ipaexg"
+                            #     cc.setFont(font_name, 7)
+                            #     t2 = " {:.2f}".format(a)
+                            #     cc.drawString(origin[0]+origin[2], origin[1]+origin[3], t2)
+                            # #end if
+                        #next
+                    #next
+
+                    # ページデータの確定
+                    cc.showPage()
+                    
+                # next
+                
+            #end if
+
+            # PDFの保存
+            cc.save()
+            
+            # PDFファイルを回転して保存
+
+            fp = out_path
+            reader = PR2(fp)
+            writer = PW2()
+
+            for i, page in enumerate(reader.pages):
+                R = PRotate[i]
+                page.rotate(R)
+                writer.add_page(page)
+
+            rfp = outpath
+            with open(rfp, 'wb') as out:
+                writer.write(out)
+
+            os.remove(out_path)
+
+            # file = PyPDF2.PdfReader(open(out_path , 'rb'))
+            # file_output = PyPDF2.PdfWriter()
+            # for page_num in range(file.pages):
+            #     page = file.getPage(page_num)
+            #     page.rotateClockwise(-PRotate[page_num])
+            #     file_output.addPage(page)
+            # with open(out_path + '_roll.pdf', 'wb') as f:
+            #     file_output.write(f)
+            
+            a=0
+        except OSError as e:
+            print(e)
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+        except:
+            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+            return False
+
+        #end try
+    #end def
+
 
     #============================================================================
     # 複数のpickleファイルから梁データおよび柱データを呼び込みそれらを比較する関数
     #============================================================================
-    def Compare_Data(self, picklefilenames):
+    def Compare_Data(self, picklefilenames, execfilename):
+        # print(self.断面寸法チェック("500×750 (Fc24)"))
+        # print(self.断面寸法チェック("500x750"))
+        print(self.フープ筋チェック("2-D13@200"))
+        print(self.フープ筋チェック("-D13 @200"))
 
-        fn = len(picklefilenames)
+        fn = len(picklefilenames)   # pickleファイルの数
         if fn >= 2 : # ファイルが2つ以上ある場合のみ処理を行う。
             BeamFoors = []
             BeamDics = []
             ColumnFoors = []
             ColumnDics = []
+            Kflags = []     # 構造計算書1:True  構造図:False
+            # 複数のpickleファイルからデータを読み出し、梁および柱毎にデータをまとめる。
             for fi, filename in enumerate(picklefilenames):
-                BeamData, ColumnData = self.Load_MemberData_Picle(filename)
+                BeamData, ColumnData, Kflag = self.Load_MemberData_Picle(filename)
                 Bfoor, Bdic = self.Classify_Data(BeamData)
                 BeamFoors.append(Bfoor)
                 BeamDics.append(Bdic)
@@ -3018,9 +3523,486 @@ class ChartReader:
                 Cfoor, Cdic = self.Classify_Data(ColumnData)
                 ColumnFoors.append(Cfoor)
                 ColumnDics.append(Cdic)
+                Kflags.append(Kflag)
             #next
+            
+            # 複数のはりデータからユニークな階リスト作成する。この場合すべてのファイルに同じ階があるとは限らない
+            # BeamFoor0 = ['R', '15', '14', '13', '12', '11', '10', '9', '8', '7', '6', '5', '4', '3', ...]
+            BeamFoor0 = []
+            for BeamFoor in BeamFoors:
+                for floor in BeamFoor:
+                    if not(floor in BeamFoor0):
+                        BeamFoor0.append(floor)
+                    #end if
+                next
+            #next
+            
+            # データフォーマット
+            # FloorBeamData = 
+            #  [                                                        [0]
+            #    [                                                      [0][0]
+            #       [True,                                              [0][0][0][0] -> True
+            #           [                                               [0][0][0][1] -> リスト
+            #               {
+            #               '梁断面位置':['左端', x0,x1,y0,y1]           [0][0][0][1][0][0]["梁断面位置"] = ['左端',・・] 
+            #               '断面寸法':['500×750 (Fc24)', x0,x1,y0,y1]  [0][0][0][1][0][0]["断面寸法"]=['500×750 (Fc24)',・・]
+            #               '主筋-1':['4/1-D25', x0,x1,y0,y1]
+            #               '主筋-2':['4-D25', x0,x1,y0,y1]
+            #               '主筋:材料':['SD345', x0,x1,y0,y1]
+            #               '上端 mm:材料':['SD345', x0,x1,y0,y1]
+            #               'かぶり-1':['50/37.5', x0,x1,y0,y1]
+            #               'かぶり-2':['50', x0,x1,y0,y1]
+            #               '下端 mm:フープ筋':['2-D13@200', x0,x1,y0,y1]
+            #               'あばら筋:材料':['SD295A', x0,x1,y0,y1]
+            #               },{
+            #               '梁断面位置':['中央', x0,x1,y0,y1]
+            #               '断面寸法':['500×750 (Fc24)', x0,x1,y0,y1]
+            #               ・・・
+            #               },{
+            #               '梁断面位置':['右端', x0,x1,y0,y1]
+            #               '断面寸法':['500×750 (Fc24)', x0,x1,y0,y1]
+            #               ・・・
+            #               }
+            #           ],
+            #       [False,・・・]
+            #     ],[[True, [...]], [False, [...]]],[[True, [...]], [False, [...]]],・・・
+            #   ]
+            #   
+            #      
+            
+            FloorBeamDataDic = {}
+            FloorBeamData = []
+            for floor in BeamFoor0:
+                # 階毎に梁符号のキーリストを作成する。
+                Gname0 = []
+                for i, BDic in enumerate(BeamDics):
+                    Kflag = Kflags[i]
+                    BFloorKeys = list(BDic.keys())
+                    if floor in BFloorKeys:
+                        Gnames, GDatas = BDic[floor]
+                        for Gname in Gnames:
+                            if not(Gname in Gname0):
+                                Gname0.append(Gname)
+                            #end if
+                        #next
+                    #end if
+                #next
+                a=0
+                SameFoorData = []
+                for Gname in Gnames:
+                    SameGnameData = []
+                    for i, BDic in enumerate(BeamDics):
+                        Kflag = Kflags[i]
+                        if floor in BFloorKeys:
+                            Gnames, GDatas = BDic[floor]
+                            if Gname in Gnames:
+                                SameGnameData.append([Kflag,GDatas[Gname]])
+                            #end if
+                        #end if
+                    #next
+                    if len(SameGnameData) >= 2:
+                        SameFoorData.append(SameGnameData)
+                    #end if
+                #next
+                if len(SameFoorData)>0:
+                    FloorBeamDataDic[floor] = SameFoorData
+                    FloorBeamData.append(SameFoorData)
+                #end if
+                a=1
+            #next
+            
+            print(FloorBeamData[0][0][0][0])
+            print(FloorBeamData[0][0][0][1][0][0]["梁断面位置"])
+
+            ExcelData = []
+            keys000 = ["図書","階","梁符号","梁断面位置","断面寸法","主筋","フープ筋"]
+            t1 = ""
+            Data = []
+
+            for key in keys000:
+                t1 += key + ","
+                Data.append(key)
+            #next
+            print(t1[:len(t1)-1])
+            # Excelのカラム名を設定
+            ExcelData.append(Data)
+
+            for SameFlooreDatas in FloorBeamData:
+                # 各階毎のデータを抽出
+                for FloorDatas in SameFlooreDatas:
+                    # 同じ梁番号のデータを抽出（計算書と構造図のデータを含む）
+                    Kflags = []
+                    datas = []
+                    dn = []
+                    for FDatas in FloorDatas:
+                        # 計算書または構造図のデータをKflagとデータに分解
+                        Kflags.append(FDatas[0])
+                        datas.append(FDatas[1])
+                        # 含まれるデータの個数を抽出（左端、中央、右端の場合は3つ、全断面の場合は1つ）
+                        dn.append(len(FDatas[1][0]))
+                    #next
+                    
+                    for i in range(dn[0]):  # 上記のデータの個数分を処理する。
+                        dic = []
+                        keys0 = []
+                        for j in range(len(datas)):     # 計算書と構造図分のキーを取得
+                            dic.append(datas[j][0][i])
+                            keys0.append(list(datas[j][0][i].keys()))
+                        #next
+                        
+                        keys00 = []
+                        for keys in keys0:
+                            # keys000 = []
+                            keys1 = []
+                            for key in keys:
+                                flag = False
+                                if ":" in key:
+                                    key0 = key.split(":")[0]
+                                    key1 = key.split(":")[1]
+                                else:
+                                    key0 = ""
+                                    key1 = key
+                                #end if
+                                if "階" in key1 :
+                                    flag = True
+                                elif key1 == "梁符号":
+                                    flag = True
+                                elif key1 == "梁断面位置":
+                                    flag = True
+                                elif key1 == "断面寸法" or key1 == "断面寸法-1":
+                                    flag = True
+                                elif "主筋" in key1 and (key0 == "" or key0 == "上端筋" or key0 == "下端筋"):
+                                    flag = True
+                                elif "フープ筋" in key1:
+                                    flag = True 
+                                #end if
+                                if flag :
+                                    keys1.append(key)
+                                #end if
+                            #next
+                            keys00.append(keys1)
+                        #next
+
+                        # keys000 = ["図書","階","梁符号","梁断面位置","主筋","主筋","フープ筋"]
+                        # t1 = ""
+                        # for key in keys000:
+                        #     t1 += key + ","
+                        # #next
+                        # print(t1[:len(t1)-1])
+                        Data1 = []
+                        for k , keys0 in enumerate(keys00):
+                            Data = []
+                            if Kflags[k]:
+                                t1 = "計算書,"
+                            else:
+                                t1 = "構造図,"
+                            #end if
+                            Data.append(t1[:len(t1)-1])
+                            # t1 = ""
+                            for key in keys0:
+                                t1 += dic[k][key][0] + ","
+                                Data.append(dic[k][key][0])
+                            #next
+                            print(t1[:len(t1)-1])
+                            ExcelData.append(Data)
+                            Data1.append(Data)
+                        #next
+                        flag = []
+                        for k in range(len(Data1[0])):
+                            key = keys000[k]
+                            if key == "図書" or key == "階" or key == "梁符号" or key == "梁断面位置" :
+                                flag.append("")
+                            elif key == "断面寸法":
+                                D0 = Data1[0][k]
+                                B0, H0 = self.断面寸法チェック(D0)
+                                flag1 = True
+                                for m in range(1,len(Data1)):
+                                    B1, H1 = self.断面寸法チェック(Data1[m][k])
+                                    if B0 == B1 and H0 ==H1:
+                                        flag1 = flag1 and True
+                                    #end if
+                                #next
+                                if flag1 :
+                                    flag.append("OK")
+                                else:
+                                    flag.append("NG")
+                                #end if
+                            elif key == "主筋":
+                                D0 = Data1[0][k]
+                                N0, DName0 = self.主筋チェック(D0)
+                                flag1 = True
+                                for m in range(1,len(Data1)):
+                                    N1, DName1 = self.主筋チェック(Data1[m][k])
+                                    if N0 == N1 and DName0 ==DName1:
+                                        flag1 = flag1 and True
+                                    #end if
+                                #next
+                                if flag1 :
+                                    flag.append("OK")
+                                else:
+                                    flag.append("NG")
+                                #end if
+                            elif key == "フープ筋":
+                                D0 = Data1[0][k]
+                                N0, DName0 = self.フープ筋チェック(D0)
+                                flag1 = True
+                                for m in range(1,len(Data1)):
+                                    N1, DName1 = self.フープ筋チェック(Data1[m][k])
+                                    if N0 == N1 and DName0 ==DName1:
+                                        flag1 = flag1 and True
+                                    #end if
+                                #next
+                                if flag1 :
+                                    flag.append("OK")
+                                else:
+                                    flag.append("NG")
+                                #end if
+                            else:
+                                flag.append("")
+                            #end if
+                        #next
+                        ExcelData.append(flag)
+                        print()
+                        ExcelData.append([])
+                    #next
+                #next
+            #next
+        
+        
+            # import openpyxl
+                # import glob
+
+            # 書き込みたいデータ
+            Data = ExcelData
+
+            # 使用するExcelファイルを選択
+            excel_file_name = execfilename
+
+            # 同じディレクトリ内のファイル名（とディレクトリ名）を取得
+            files = glob.glob("*.xlsx")
+
+            # 存在する場合：存在しているファイルを使用、存在しない場合：ファイル作成
+            if excel_file_name in files:
+                pass
+            else:
+                create_file = openpyxl.Workbook()
+                create_file.save(excel_file_name)
+
+            # 使用するExcelファイルを選択
+            excel_file = openpyxl.load_workbook(excel_file_name)
+            # 選択したExcelファイルの中にあるシート名を取得
+            sheet_list = excel_file.sheetnames
+
+            # シート名を定義
+            sheet_name = '梁データ'
+
+            # シート内に先ほどのシート名がなければ作成
+            if sheet_name in sheet_list:
+                pass
+            else:
+                excel_file.create_sheet(title=sheet_name)
+
+            # 書き込むExcelシートを選択
+            sheet = excel_file[sheet_name]
+
+            # 書き込み始める行と列を定義
+            start_row = 1
+            start_col = 1
+
+            # 書き込みたいデータをfor文で書き込み
+            for y, row in enumerate(Data):
+                for x, cell in enumerate(row):
+                    sheet.cell(row=start_row + y,
+                            column=start_col + x,
+                            value=Data[y][x])
 
 
+            # sheet['A1'].font = openpyxl.styles.fonts.Font(color='FF0000')
+
+            # 変更を保存
+            excel_file.save(excel_file_name)
+                        
+                        
+            a=0
+                    
+                            
+                
+                    
+
+
+            # 複数の柱データからユニークな階リスト作成する。この場合すべてのファイルに同じ階があるとは限らない
+            ColumnFoor0 = []
+            for ColumnFoor in ColumnFoors:
+                for floor in ColumnFoor:
+                    if not(floor in ColumnFoor0):
+                        ColumnFoor0.append(floor)
+                    #end if
+                next
+            #next
+                
+            FloorColumnDataDic = {}
+            FloorColumnData = []
+            for floor in ColumnFoor0:
+                # 階毎に梁符号のキーリストを作成する。
+                Cname0 = []
+                for i, CDic in enumerate(ColumnDics):
+                    Kflag = Kflags[i]
+                    CFloorKeys = list(CDic.keys())
+                    if floor in CFloorKeys:
+                        Cnames, CDatas = CDic[floor]
+                        for Cname in Cnames:
+                            if not(Cname in Cname0):
+                                Cname0.append(Cname)
+                            #end if
+                        #next
+                    #end if
+                #next
+                a=0
+                SameFoorData = []
+                for Cname in Cnames:
+                    SameCnameData = []
+                    for i, CDic in enumerate(ColumnDics):
+                        Kflag = Kflags[i]
+                        if floor in CFloorKeys:
+                            Cnames, CDatas = CDic[floor]
+                            if Cname in Cnames:
+                                SameCnameData.append([Kflag,CDatas[Cname]])
+                            #end if
+                        #end if
+                    #next
+                    if len(SameCnameData) >= 2:
+                        SameFoorData.append(SameCnameData)
+                    #end if
+                #next
+                if len(SameFoorData)>0:
+                    FloorColumnDataDic[floor] = SameFoorData
+                    FloorColumnData.append(SameFoorData)
+                #end if
+                a=1
+            #next
+            print(FloorColumnData[0][0][0][0])
+            print(FloorColumnData[0][0][0][1][0][0]["柱符号"])
+
+            a=1
+
+            # import openpyxl
+            # import glob
+
+            # # 書き込みたいデータ
+            # Data = [[1,2,3],[4,5,6]]
+
+            # # 使用するExcelファイルを選択
+            # excel_file_name = 'Excel_test.xlsx'
+
+            # # 同じディレクトリ内のファイル名（とディレクトリ名）を取得
+            # files = glob.glob("*.xlsx")
+
+            # # 存在する場合：存在しているファイルを使用、存在しない場合：ファイル作成
+            # if excel_file_name in files:
+            #     pass
+            # else:
+            #     create_file = openpyxl.Workbook()
+            #     create_file.save(excel_file_name)
+
+            # # 使用するExcelファイルを選択
+            # excel_file = openpyxl.load_workbook(excel_file_name)
+            # # 選択したExcelファイルの中にあるシート名を取得
+            # sheet_list = excel_file.sheetnames
+
+            # # シート名を定義
+            # sheet_name = 'Sheet' + str(ID_num)
+
+            # # シート内に先ほどのシート名がなければ作成
+            # if sheet_name in sheet_list:
+            #     pass
+            # else:
+            #     excel_file.create_sheet(title=sheet_name)
+
+            # # 書き込むExcelシートを選択
+            # sheet = excel_file[sheet_name]
+
+            # # 書き込み始める行と列を定義
+            # start_row = 1
+            # start_col = 1
+
+            # # 書き込みたいデータをfor文で書き込み
+            # for y, row in enumerate(Data):
+            #     for x, cell in enumerate(row):
+            #         sheet.cell(row=start_row + y,
+            #                 column=start_col + x,
+            #                 value=Data[y][x])
+
+            # # 変更を保存
+            # excel_file.save(excel_file_name)
+
+                
+
+    def 主筋チェック(self,D):
+        D2 = ""
+        D3 = ""
+        if D != "":
+            D1 = D.replace(" ","")
+            if "-" in D1:
+                D2 = D1.split("-")[0]
+                D3 = D1.split("-")[1]
+                if "/" in D2:
+                    D22 = D2.split("/")
+                    a = 0
+                    for D222 in D22:
+                        a += int(D222)
+                    #next
+                    D2 = str(a)
+                #end if
+            #end if
+        #end if
+        return D2,D3
+    #end def
+                    
+    def 断面寸法チェック(self,D):
+        D2 = ""
+        D3 = ""
+        if D != "":
+            D1 = D.replace(" ","")
+            S = "×xｘ"
+            i = 0
+            S1 = ""
+            for i in range(len(S)):
+                if S[i] in D1:
+                    S1 = S[i]
+                    break
+                #end if
+            #next
+            if S1 != "":
+                if S1 in D1:
+                    D2 = D1.split(S1)[0]
+                    D2 = D2.replace(",","")
+                    # D2 = re.sub(r"\D", "", D2)
+                    D3 = D1.split(S1)[1]
+                    D3 = D3.replace(",","")
+                    if "("in D3:
+                        D3 = D3[:D3.find("(")]
+                    #end if
+                    # D3 = re.sub(r"\D", "", D3)
+                    
+                #end if
+            #end if
+        #end if
+        return D2,D3
+    #end def
+
+    def フープ筋チェック(self,D):
+        D2 = ""
+        D3 = ""
+        if D != "":
+            D1 = D.replace(" ","")
+            D1 = D1[D1.find("-")+1:]
+            if "@" in D1:
+                D2 = D1.split("@")[0]
+                D3 = D1.split("@")[1]
+            #end if
+        #end if
+        return D2,D3
+    #end def
 
     #============================================================================
     # 梁データまたは柱データからデータの辞書を作成する関数
@@ -3035,14 +4017,14 @@ class ChartReader:
         #           MemberDic   :符号リストがキーのデータの辞書
         #
         #                       (データの例)
-        #                       '階':'R'
-        #                       '梁符号':'G1'
-        #                       '梁断面位置':'1通端'
-        #                       '断面寸法':'450x800'
-        #                       '上端筋:主筋':'5-D25'
-        #                       '下端筋:主筋':'4-D25'
-        #                       'あばら筋:フープ筋':'-D13@200'
-        #                       '腹筋':'2-D10'
+        #                       '階':['R',x0,x1,y0,y1]
+        #                       '梁符号':['G1',x0,x1,y0,y1]
+        #                       '梁断面位置':['1通端',x0,x1,y0,y1]
+        #                       '断面寸法':['450x800',x0,x1,y0,y1]
+        #                       '上端筋:主筋':['5-D25',x0,x1,y0,y1]
+        #                       '下端筋:主筋':['4-D25',x0,x1,y0,y1]
+        #                       'あばら筋:フープ筋':['-D13@200',x0,x1,y0,y1]
+        #                       '腹筋':['2-D10',x0,x1,y0,y1]
         #
         #==================================================================================
         
@@ -3060,7 +4042,7 @@ class ChartReader:
             Data2 = []
             for i, D in enumerate(Data1):
                 D1 = D.copy()
-                floor = D[0]["階"]
+                floor = D[0]["階"][0]
                 if "," in floor:
                     D2 = D1.copy()
                     f0 = floor.split(",")
@@ -3075,7 +4057,7 @@ class ChartReader:
                     for j in range(f2,f3+1):
                         D3 = D2.copy()
                         for D4 in D3:
-                            D4["階"] = str(j)
+                            D4["階"][0] = str(j)
                         #next
                         Data2.append(copy.deepcopy(D3))
                     #next
@@ -3093,14 +4075,14 @@ class ChartReader:
             # Data中の階データの種類のリストを取得
             # FloorNames = []
             for D in Data1:
-                if not(D[0]["階"] in FloorNames):
-                    FloorNames.append(D[0]["階"])
+                if not(D[0]["階"][0] in FloorNames):
+                    FloorNames.append(D[0]["階"][0])
                 #end if
             #next
             
             L2 = []
             for d in FloorNames:
-                if "R" in d:
+                if "R" in d[0]:
                     L2.append(1000)
                 else:
                     L2.append(int(d))
@@ -3120,7 +4102,7 @@ class ChartReader:
             for FloorName in FloorNames:
                 FloorDatas = []
                 for D in Data1:
-                    if D[0]["階"] == FloorName :
+                    if D[0]["階"][0] == FloorName :
                         FloorDatas.append(D)
                     #end if
                 #next
@@ -3128,8 +4110,8 @@ class ChartReader:
                 # 抽出したデータの符号名のリストを取得
                 MemberNames = []
                 for D in FloorDatas:
-                    if not(D[0][MemberKey] in MemberNames):
-                        MemberNames.append(D[0][MemberKey])
+                    if not(D[0][MemberKey][0] in MemberNames):
+                        MemberNames.append(D[0][MemberKey][0])
                     #end if
                 #next
                         
@@ -3140,7 +4122,7 @@ class ChartReader:
                 for MemberName in MemberNames:
                     MemberDatas = []
                     for D in FloorDatas:
-                        if D[0][MemberKey] == MemberName :
+                        if D[0][MemberKey][0] == MemberName :
                             MemberDatas.append(D)
                         #end if
                     #next
@@ -3171,34 +4153,36 @@ class ChartReader:
         print(filename)
         pdf_file = filename
 
+        self.ReadPageSize(pdf_file)
+
         # PyPDF2のツールを使用してPDFのページ情報を読み取る。
         # PDFのページ数と各ページの用紙サイズを取得
-        PaperSize = []
-        self.PaperRotate = []                
-        try:
-            with open(pdf_file, "rb") as input:
-                reader = PR2(input)
-                PageMax = len(reader.pages)     # PDFのページ数
-                # PaperSize = []
-                # PaperRotate = []
-                for page in reader.pages:       # 各ページの用紙サイズの読取り
-                    p_size = page.mediabox
-                    rotate = page.get('/Rotate', 0)
-                    self.PaperRotate.append(rotate)
-                    page_xmin = float(page.mediabox.lower_left[0])
-                    page_ymin = float(page.mediabox.lower_left[1])
-                    page_xmax = float(page.mediabox.upper_right[0])
-                    page_ymax = float(page.mediabox.upper_right[1])
-                    PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
-            #end with
-        except OSError as e:
-            print(e)
-            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-            return False
-        except:
-            logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
-            return False
-        #end try
+        # self.PaperSize = []
+        # self.PaperRotate = []                
+        # try:
+        #     with open(pdf_file, "rb") as input:
+        #         reader = PR2(input)
+        #         PageMax = len(reader.pages)     # PDFのページ数
+        #         # PaperSize = []
+        #         # PaperRotate = []
+        #         for page in reader.pages:       # 各ページの用紙サイズの読取り
+        #             p_size = page.mediabox
+        #             rotate = page.get('/Rotate', 0)
+        #             self.PaperRotate.append(rotate)
+        #             page_xmin = float(page.mediabox.lower_left[0])
+        #             page_ymin = float(page.mediabox.lower_left[1])
+        #             page_xmax = float(page.mediabox.upper_right[0])
+        #             page_ymax = float(page.mediabox.upper_right[1])
+        #             self.PaperSize.append([page_xmax - page_xmin , page_ymax - page_ymin])
+        #     #end with
+        # except OSError as e:
+        #     print(e)
+        #     logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+        #     return False
+        # except:
+        #     logging.exception(sys.exc_info())#エラーをlog.txtに書き込む
+        #     return False
+        # #end try
         
         #=============================================================
         # startpage = 1
@@ -3215,12 +4199,21 @@ class ChartReader:
         pageNo = []
         BeamData = []
         ColumnData = []
+        self.pageNoB = []
+        self.pageNoC = []
+        self.BeamD = []
+        self.ColumnD = []
         try:
             
             with pdfplumber.open(pdf_file) as pdf:
                 # interpreter = PDFPageInterpreter(resourceManager, device)
                 # interpreter2 = PDFPageInterpreter(resourceManager, device2)
 
+                dname = os.path.dirname(pdf_file)
+                dname = dname.replace("/in","/out2")
+                        
+                # fname = os.path.basename(pdf_file)
+                        
                 PageData = []
                 for page in pdf.pages:
                 # for page in PDFPage.get_pages(PDF):
@@ -3249,19 +4242,30 @@ class ChartReader:
 
                     # outfile = outdir + "/" + "outfile{:0=4}.pdf".format(pageI)
                     ResultData = []
+                    self.pageNoB = []
+                    self.pageNoC = []
+                    self.BeamD = []
+                    self.ColumnD = []
                     print("ps={}:page={}:".format(psn,pageI), end="")
 
                     BeamData1, ColumnData1 = self.ElementFinder(page)
 
-                    # print(len(BeamData1),len(ColumnData1))
+                    # print(len(BeamData1),len(ColumnData1)) '{0:04}'.format(num)
 
                     if len(BeamData1) > 0:
-                            BeamData += BeamData1
+                        BeamData += BeamData1
+                        self.pageNoB.append(pageI)
+                        self.BeamD.append(BeamData1)
                     #end if
                     if len(ColumnData1) > 0:
                         ColumnData += ColumnData1
+                        self.pageNoC.append(pageI)
+                        self.ColumnD.append(ColumnData1)
                     #end if
-
+                    if len(BeamData1)>0 or len(ColumnData1) > 0:
+                        filename4 = dname +"/" + "Page{0:03}".format(pageI) + ".pdf"
+                        self.DrawRectOnPdf(pdf_file,filename4)
+                    #end if
                 #next
 
                 # fp.close()
@@ -3272,7 +4276,11 @@ class ChartReader:
             if len(BeamData)>0 or len(ColumnData)>0:
                 filename2 = os.path.splitext(pdf_file)[0] + ".pickle"
                 filename2 = filename2.replace("/in/","/out/")
-                self.Save_MemberData_Picle(filename2 ,BeamData ,ColumnData)
+                self.Save_MemberData_Pickle(filename2 ,BeamData ,ColumnData, self.構造計算書Flag)
+                # filename4 = os.path.splitext(pdf_file)[0] + "_部材検出結果" + ".pdf"
+                # filename4 = filename4.replace("/in/","/out2/")
+                # self.DrawRectOnPdf(pdf_file,filename4)
+
             #end if
 
         except OSError as e:
@@ -3311,7 +4319,8 @@ if __name__ == '__main__':
 
     CR = ChartReader()
 
-    flag = 1
+    flag = 1    # 計算書と構造図の部材の比較
+    # flag = 2    # PDFから部材データを読み込む
 
     if flag == 1:
         
@@ -3322,7 +4331,8 @@ if __name__ == '__main__':
         pdffname2.append("PICKLE/02一貫計算書（一部）（抜粋）_部材リスト.pickle")
         pdffname2.append("PICKLE/02構造図（抜粋）_部材リスト.pickle")
         
-        CR.Compare_Data(pdffname2)
+        excelfilename = "EXCEL/result.xlsx"
+        CR.Compare_Data(pdffname2, excelfilename)
 
     elif flag == 2:
 
@@ -3333,12 +4343,12 @@ if __name__ == '__main__':
         
         # pdffname.append("構造図テストデータ.pdf")
         # pdffname.append("構造計算書テストデータ.pdf")
-
-        # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
-        # pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
         
-        pdffname.append("02構造図（抜粋）.pdf")
-        pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
+        # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
+        pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
+        
+        # pdffname.append("02構造図（抜粋）.pdf")
+        # pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
 
         # pdffname.append("03sawarabi 京都六角 計算書 (事前用)（抜粋）.pdf")
         # pdffname.append("03sawarabi 京都六角 構造図(事前用)（抜粋）.pdf")
@@ -3356,11 +4366,16 @@ if __name__ == '__main__':
         Folder1 = "PDF"
         Folder2 = "CSV"
         Folder3 = "PICKLE"
+        Folder4 = "PDF_OUTPUT"
         for pdf in pdffname:
             print("ファイ名={}".format(pdf))
-            BeamData , ColumnData = CR.Read_Members_from_pdf(Folder1 + "/"+ pdf)
+            filename0 = Folder1 + "/"+ pdf
+            BeamData , ColumnData ,Kflag = CR.Read_Members_from_pdf(filename0)
             
             if len(BeamData) > 0 or len(ColumnData) > 0:
+                filename4 = os.path.splitext(pdf)[0] + "_部材検出結果" + ".pdf"
+                filename4 = Folder4 + "/"+ filename4
+                CR.DrawRectOnPdf(filename0,filename4)
 
                 # FloorNames1,FloorDic1 = CR.Classify_Data(BeamData)
                 # FloorNames2,FloorDic2 = CR.Classify_Data(ColumnData)
@@ -3368,7 +4383,7 @@ if __name__ == '__main__':
 
                 filename2 = os.path.splitext(pdf)[0] + "_部材リスト" + ".pickle"
                 filename2 = Folder3 + "/"+ filename2
-                CR.Save_MemberData_Picle(filename2,BeamData,ColumnData)
+                CR.Save_MemberData_Pickle(filename2, BeamData, ColumnData, Kflag)
 
                 filename = os.path.splitext(pdf)[0] + "_部材リスト" + ".csv"
                 filename = Folder2 + "/"+ filename

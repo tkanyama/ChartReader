@@ -226,17 +226,17 @@ def RunCheck():
                         # パラメータファイル名の設定
                         parafile = path1 + '/' + paraFileName
 
-                        if os.path.isfile(parafile):    # パラメータファイルがある場合はパラメータを読み込む
-                            json_open = open(parafile, 'r', encoding="utf-8")
-                            json_load = json.load(json_open)
-                            limit1 = json_load['数値の閾値']
-                            stpage = json_load['開始ページ']
-                            edpage = json_load['終了ページ']
-                            json_open.close()
-                        else:                           # パラメータファイルがない場合はデフォルト値を設定
-                            limit1 = 0.95
-                            stpage = 2
-                            edpage = 0   # 全ページ
+                        # if os.path.isfile(parafile):    # パラメータファイルがある場合はパラメータを読み込む
+                        #     json_open = open(parafile, 'r', encoding="utf-8")
+                        #     json_load = json.load(json_open)
+                        #     limit1 = json_load['数値の閾値']
+                        #     stpage = json_load['開始ページ']
+                        #     edpage = json_load['終了ページ']
+                        #     json_open.close()
+                        # else:                           # パラメータファイルがない場合はデフォルト値を設定
+                        #     limit1 = 0.95
+                        #     stpage = 2
+                        #     edpage = 0   # 全ページ
                         #end if
 
                         for file in files:
@@ -244,16 +244,19 @@ def RunCheck():
                             if not "検出結果" in file:  # ファイル名に"検出結果"が含まれる場合は結果ファイルなので無視する。
 
                                 fname = os.path.basename(file)  # 表示ウインドウに表示するファイル名を設定
-                                MCT = multicheck(file,limit=limit1,stpage=stpage,edpage=edpage,bunkatu=BUNKATU)
-                                message = folderName + "/" + fname + ":数値の検出開始"
+                                # MCT = multicheck(file,limit=limit1,stpage=stpage,edpage=edpage,bunkatu=BUNKATU)
+                                MCT = multicheck(file, inputfolder1="PDF", outputfolder1="CSV", outputfolder2="PDF_OUTPUT",
+                                                stpage=0, edpage=0, bunkatu=4)
+                                message = folderName + "/" + fname + ":部材データの検出開始"
                                 AddLog(message)
                                 if MCT.doCheck():
                                 # if CT.CheckTool(file, limit=limit1, stpage=stpage, edpage=edpage):
-                                    outfolder = folder + '[検出結果(閾値={:.2f}'.format(limit1)+')]'
+                                    # outfolder = folder + '[検出結果(閾値={:.2f}'.format(limit1)+')]'
+                                    outfolder = folder + '[検出結果]'
                                     # 検査がエラーなく終了した場合の処理
                                     # 処理後フォルダーに同じ名称のデータフォルダーがある場合は、上書きせずに、
                                     # データフォルダー名に'(n)'を追加して移動
-                                    message = folderName + "/" + fname + ":数値の検出処理OK"
+                                    message = folderName + "/" + fname + ":部材データの検出処理OK"
                                     AddLog(message)
                                     # フォルダー名の最後の3文字が (n) の場合は何番目であるか
                                     t1 = outfolder[len(outfolder)-3:]

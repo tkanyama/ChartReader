@@ -43,10 +43,12 @@ class multicheck:
     #       edpage      : 処理終了ページ
     #       bunkatu     : 並列処理の分割数
     #============================================================================
-    def __init__(self,filename1, inputfolder1="PDF", outputfolder1="CSV", stpage=0, edpage=0, bunkatu=4):
+    def __init__(self,filename1, inputfolder1="PDF", outputfolder1="CSV", outputfolder2="PDF_OUTPUT",
+                stpage=0, edpage=0, bunkatu=4):
         self.filename = filename1
         self.inputfolder = inputfolder1
         self.outputfolder = outputfolder1
+        self.outputfolder2 = outputfolder2
         self.bunkatu = bunkatu
         self.kinf =""
         self.version = ""
@@ -118,6 +120,20 @@ class multicheck:
         if not os.path.isdir(self.dir2):
             os.mkdir(self.dir2)
         #end if
+        
+        # 結果ファイルを一時保存するディレクトリー（無ければ作成）
+        self.dir3 = fld + "/out2"
+        if not os.path.isdir(self.dir3):
+            os.mkdir(self.dir3)
+        #end if
+            
+        # self.dir4 = fld + "/PDF_OUTPUT"
+        # if not os.path.isdir(self.dir4):
+        #     os.mkdir(self.dir4)
+        # #end if
+
+        # fname = os.path.basename(fname)
+        # self.pdf_out_file = self.dir4 + "/"+ fname.replace(".pdf","") + "_部材検出結果.pdf"
 
         p_file = fld + "/in/inputfile.pdf"
         # PDFファイルを回転して保存
@@ -176,6 +192,7 @@ class multicheck:
     def PageCheck(self,fname,outdir,psn,PageNumber,ProcessN):
         CT = ChartReader()
         # CT.Read_and_Save_Members_To_Pickle(fname,outdir)
+        
         CT.PageCheck(fname,outdir,psn,PageNumber,ProcessN)
 
 
@@ -189,7 +206,9 @@ class multicheck:
     def doCheck(self):
         global kind, version
 
-        
+        filename4 = os.path.splitext(self.filename)[0] + "_部材検出結果" + ".pdf"
+        self.pdf_out_file = self.outputfolder2 + "/" + filename4 
+
 #       計算書の分割        
         self.makepdf()
 
@@ -259,7 +278,7 @@ class multicheck:
         BeamData = []
         ColumnData = []
         for file in files:
-            BeamData1, ColumnData1 = CR.Load_MemberData_Picle(file)
+            BeamData1, ColumnData1 ,Kflag = CR.Load_MemberData_Picle(file)
             if len(BeamData1) > 0:
                     BeamData += BeamData1
             #end if
@@ -275,6 +294,48 @@ class multicheck:
         filename2 = os.path.splitext(self.filename)[0] + "_部材リスト" + ".csv"
         # filename2 = filename2.replace("PDF/" , "CSV/")
         CR.Save_MemberData_Csv(self.outputfolder + "/" + filename2, BeamData,ColumnData)
+
+
+
+        # 結果フォルダーにあるファイル名の読取り
+        files2 = glob.glob(os.path.join(self.dir3, "*.pdf"))
+        # ファイルのソート
+        files2.sort()
+
+        # 結果ファイルを順番に結合し、１つの結果ファイルを保存
+        merger = pypdf.PdfMerger()
+        # file1 = self.dir3 + "/f1.pdf"
+        for i,file in enumerate(files2):
+            merger.append(file)
+            # if i == 0:
+            #     merger.append(file)
+            # else:
+            #     n = int(file.replace(".pdf","")[-4:])
+            #     if self.rotate[n-1] != 0:
+            #         f1 = pypdf.PdfReader(open(file , 'rb'))
+            #         f2 = pypdf.PdfWriter()
+            #         for page in f1.pages:
+            #             rotate = self.rotate[n-1]
+            #             if rotate != 0:
+            #                 page.rotate(rotate)
+            #             f2.add_page(page)
+            #         with open(file1, 'wb') as f:
+            #             f2.write(f)
+            #         merger.append(file1)
+            #     else:
+            #         merger.append(file)
+            #     #end if
+            # #end if
+            # if os.path.exists(file1):
+            #     os.remove(file1)
+            #
+        #next
+        merger.write(self.pdf_out_file)
+        merger.close()
+
+        # 結果ファイルを消去
+        for file in files2:
+            os.remove(file)
 
         # 結果ファイルを消去
         for file in files:
@@ -308,11 +369,11 @@ if __name__ == '__main__':
 
     # pdffname.append("ミックスデータ.pdf")
     
-    pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
-    pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
+    # pdffname.append("01(仮称)阿倍野区三明町2丁目マンション新築工事_構造図（抜粋）.pdf")
+    # pdffname.append("01(2)Ⅲ構造計算書(2)一貫計算編電算出力（抜粋）.pdf")
     
-    pdffname.append("02構造図（抜粋）.pdf")
-    pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
+    # pdffname.append("02構造図（抜粋）.pdf")
+    # pdffname.append("02一貫計算書（一部）（抜粋）.pdf")
 
     pdffname.append("03sawarabi 京都六角 計算書 (事前用)（抜粋）.pdf")
     pdffname.append("03sawarabi 京都六角 構造図(事前用)（抜粋）.pdf")
@@ -329,10 +390,11 @@ if __name__ == '__main__':
 
     Folder1 = "PDF"
     Folder2 = "CSV2"
-    Folder3 = "PICKLE"
+    Folder3 = "PDF_OUTPUT"
     for pdf in pdffname:
         
-        MCT = multicheck(pdf,inputfolder1=Folder1,outputfolder1=Folder2,stpage=1,edpage=100,bunkatu=4)
+        MCT = multicheck(pdf,inputfolder1=Folder1,outputfolder1=Folder2,outputfolder2=Folder3,
+                        stpage=1,edpage=100,bunkatu=4)
         MCT.doCheck()
 
 

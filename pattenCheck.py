@@ -38,11 +38,17 @@ class PatternCheck:
         # self.patternDic["断面寸法4"]=[[
         #                             '(\s*\d+\s*(×|x|ｘ)\s*)|(\s*\d+,\d+\s*(×|x|ｘ)\s*)'
         #                         ], 25](\\s*G\\d{1,2}\\D*\\s*)|\\s*G\\d{1,2}\\D*\\s*\\,\\s*G\\d{1,2}\\D*\\s*
+        self.patternDic["日付"]=[[
+                                # '(\s*\d{4}/\d{1,2}/\d{1,2}\s*)'  # 2024/01/31
+                                '(\s*\d{4}/[0-1]*[0-9]/[0-3]*[0-9]\s*)'  # 2024/01/31
+                                # '|'+'(\s*\d{2}/\d{1,2}/\d{1,2}\s*)' # 24/01/31
+                                '|'+'(\s*[0-9][0-9]/[0-1][0-9]/[0-3][0-9]\s*)' # 24/01/31
+                                ], 12]
         self.patternDic["梁符号1"]=[[
                                     '(\s*G\d{1,2}\D*\s*)'   # G1 G20 G1A G20A
                                 '|'+'\s*G\d{1,2}\D*\s*(,|、|，)\s*G\d{1,2}\D*\s*' # G2, G2A
                                 # # '|'+'(\s*FCG\d{1,2}\D*\s*)'          # FCG1 FCG10 FCG1A FCG10A
-                                ] , 10 ] # 文字数制限
+                                ] , 8 ] # 文字数制限
         self.patternDic["小梁符号"]=[[
                                     '(\s*B\d{1,2}\D*\s*)' +         # B1 B20 B1A B20A
                                 '|'+'(\s*(C|F)B\d{1,2}\D*\s*)'        # CB1 CB10 CB1A CB10A FB1 FB10 FB1A FB10A
@@ -110,8 +116,11 @@ class PatternCheck:
                                     '\s*同\s*上\s*'
                                 ], 6]
         self.patternDic["断面リスト"]=[[
-                                    '断面リスト'
+                                    '\S*\s*断面リスト\s*\S*'
                                 ], 10]
+        self.patternDic["断面"]=[[
+                                    '\s*断\s*面\s*'
+                                ], 6]
         self.patternDic["項目名2"]=[[
                                     '(\s*上端\s*)'+    # 上端
                                     '|'+'(\s*下端\s*)'+ # 下端
@@ -167,6 +176,7 @@ class PatternCheck:
         self.patternDic["主筋"]=[[
                                 '(\s*\d{1,2}/\d{1,2}-D\d{2}\s*)'+                 # 2/4-D25 10/10-D25
                                 '|'+'(\s*\d{1,2}-D\d{2}\s*)'+                     # 2-D25 10-D25
+                                '|'+'(\s*\d{1,2}-D\d{2}\s*\(\S*\s*)'+                     # 2-D16(柱内定着)
                                 '|'+'(\s*\d{1,2}/\d{1,2}/\d{1,2}-D\d{2}\s*)'+     # 2/2/4-D25 10/10/10-D25
                                 '|'+'(\s*\d{1,2}-D\d{2}\s*(,|\+)\s*\d{1,2}-D\d{2}\s*)'   # 2-D25,10-D25 2-D25+10-D25
                                 ], 16]
@@ -174,6 +184,7 @@ class PatternCheck:
         self.patternDic["材料"]=[[
                                     '(\s*SD\d+\w*\s*)'+       # SD295A,SD345
                                 '|'+'(\s*SPR\d+\w*\s*)' +      # SPR685,SPR685A
+                                '|'+'(\s*KH\d+\w*\s*)' +      # KH785
                                 '|'+'((\s*(X|Y):SD)\d+\w*\s*)' +      # X:SD390 Y:SD345
                                 '|'+'(\s*X:SD\d+\D*\s{1}Y:SD\d+\D*\s*)'       # X:SD390 Y:SD345
                                 ],10]
@@ -186,16 +197,19 @@ class PatternCheck:
                                 '|'+'(\s*R\s*)'                   # R
                                 ], 8]
         self.patternDic["階上項目"]=[[
-                                    '\s*階\s*|\s*符\s*号\s*'
+                                    '\s*階\s*' #|\s*符\s*号\s*'
                                 ], 6]
-        self.patternDic["日付"]=[[
-                                '(\s*\d{4}/\d{1,2}/\d{1,2}\s*)'  # 2024/01/31
-                                ], 12]
         self.patternDic["かぶり"]=[[
-                                '(\s*\d+(\d+.\d+)*\s*/\s*\d+(\d+.\d+)*\s*)'+      # 50/50 50/37.5 50.5/50 50.5/50.5
-                                '|'+'(\s*\d+(\d+.\d+)*\s*)'+
-                                '|'+'(\s*\d{3}\s*)'              # 20
-                                ], 12]
+                                '(\s*\d{2,3}\s*/\s*\d{2,3}\s*)' # 50/50 50 / 50
+                                '|'+'(\s*\d{2,3}.\d{1}\s*)' # 50.5
+                                '|'+'(\s*\d{2,3}.\d{1}\s*/\s*\d{2,3}\s*)' # 50.5/50 50.5 / 50
+                                '|'+'(\s*\d{2,3}\s*/\s*\d{2,3}.\d{1}\s*)' # 50/50.5 50 / 50.5
+                                '|'+'(\s*\d{2,3}(.\d{1})*\s*/\s*\d{2,3}(.\d{1})*\)*)' # 50.5/50.5 50.5/ 50.5
+                                # '|'+'(\s*\d{2,3}(.\d{1})*\s*/\s*\d{2,3}(.\d{1})*\)*\s*\d{2,3}(.\d{1})*\)*)' # 50.5/50.5 50.5/ 50.5
+                                '|'+'(\s*\d{2,3}(.\d{1})*/\s*\d{2,3}(.\d{1})*\s*/\d{2,3}(.\d{1})*\s*)' 
+                                # 50.5/50.5/40.0
+                                
+                                ], 13]
         self.patternDic["X通"]=[['\s*X\d+\Z\s*'], 4]
         self.patternDic["Y通"]=[['\s*Y\d+\Z\s*'], 4]
         
@@ -210,6 +224,7 @@ class PatternCheck:
         # print(word)
         for key in self.PatternKeys:
             [p1,n] = self.patternDic[key]
+            # print(key)
             if len(word) <= n:
                 for p in p1:
                     # if re.match(p,word):
@@ -251,6 +266,7 @@ class PatternCheck:
             #end if
         #next
         words = []
+        
         if " " in word or "," in word:
             words = word.split(" ")
             if len(words) == 0:
@@ -264,7 +280,11 @@ class PatternCheck:
                             for p in p1:
                                 # if re.match(p,word):
                                 if re.fullmatch(p,word1):
-                                    return key
+                                    if key != "かぶり":
+                                        return key
+                                    else:
+                                        return ""
+                                    #end if
                                 #end if
                             #next
                         #next
@@ -302,6 +322,7 @@ if __name__ == '__main__':
 
     data1 = []
 
+    
     # # 断面寸法2
     data1.append("2-D25 + ")
     data1.append("D")
@@ -408,16 +429,18 @@ if __name__ == '__main__':
     data1.append("2-D29,4-D22")
     data1.append("2-D29+4-D22")
     data1.append("24-D35+ 8-D38")
+    data1.append("2-D16(柱内定着)")
     # 腹筋
     data1.append("4-D13")
     data1.append(" 4-D10 ")
-    # フープ筋-TA13 @100
+    # フープ筋-TA13 @1005 -TA13 @150
     data1.append("2-D13@200")
     data1.append("2-TA13@150")
     data1.append("-D13@150")
     data1.append("5 -K16@150")
     data1.append("-D13@ 150")
     data1.append("-TA13 @100")
+    data1.append("5 -TA13 @150")
     
     # 柱符号
     data1.append("C1")
@@ -493,9 +516,11 @@ if __name__ == '__main__':
     data1.append("2024/01/31")
     data1.append("2024/1/1")
     # かぶり
+    data1.append("大梁ﾘｽﾄ(1) 1/50")
     data1.append("37.5")
     data1.append("30")
     data1.append("50/50")
+    data1.append("120/120")
     data1.append("50/37.5")
     data1.append("37.5/50")
     data1.append("50.5/50.5")
@@ -504,8 +529,18 @@ if __name__ == '__main__':
     data1.append("37.5 / 50")
     data1.append("50.5 / 50.5")
     data1.append("200")
+    data1.append("3 7")
+    data1.append("1/50")
+    data1.append("23/06/19")
+    data1.append("大梁ﾘｽﾄ(1) 1/50")
+    data1.append("70/48.0/48.0")
+    data1.append("70/70/70")
     
-
+    data1.append("1.4 断面リスト -")
+    
+    data1.append("断面")
+    data1.append("断 面")
+    
     for d in data1:
         print(d,"=",pm1.checkPattern(d))
 
